@@ -227,7 +227,8 @@ function FlatpickrInstance(
   function updateTime(
     e?: MouseEvent | IncrementEvent | KeyboardEvent | FocusEvent
   ) {
-    if (self.selectedDates.length === 0) {
+    // Update the time only when the DatePicker has no Calendar i.e. it is in TimePicker mode
+    if (self.selectedDates.length === 0 && self.config.noCalendar) {
       const defaultDate =
         self.config.minDate === undefined ||
         compareDates(new Date(), self.config.minDate) >= 0
@@ -245,6 +246,7 @@ function FlatpickrInstance(
       self.selectedDates = [defaultDate];
       self.latestSelectedDateObj = defaultDate;
     }
+    
     if (e !== undefined && e.type !== "blur") {
       timeWrapper(e);
     }
