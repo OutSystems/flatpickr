@@ -483,7 +483,7 @@ function FlatpickrInstance(
         ) {
           return;
         }
-        const newDate = new Date(self._input.value);
+        const newDate = new Date(self.parseDate(self._input.value, self.config.altFormat));
         setDate(newDate, true);
         break;
       // Close the calendar
