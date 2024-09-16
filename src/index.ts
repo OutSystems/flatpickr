@@ -484,7 +484,7 @@ function FlatpickrInstance(
           return;
         }
         const newDate = new Date(self.parseDate(self._input.value, self.config.altFormat));
-        setDate(newDate, true);
+        setDate(newDate, true, self.config.altFormat);
         break;
       // Close the calendar
       case "Tab":
