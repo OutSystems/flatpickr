@@ -484,20 +484,9 @@ function FlatpickrInstance(
           return;
         }
 
-        // Get the input value
-        const inputValue = self._input.value.trim();
-        // With the input value, let's try to parse the date based on the defined altFormat
-        const newDate = self.parseDate(inputValue, self.config.altFormat) as Date;
-
-        // Check if the input is empty or the date is invalid, if so, prevent date to be set!
-        if (inputValue === "") {
-            return
-        } else if (isNaN(Number(newDate))) {
-            console.error("Inserted date is not valid");
-            return;
-        }
-
-        setDate(newDate, true);
+        self._input.blur();
+        self.close();
+        
         break;
       // Close the calendar
       case "Tab":
@@ -2339,8 +2328,8 @@ function FlatpickrInstance(
 
     tokenRegex.D = `(${self.l10n.weekdays.shorthand.join("|")})`;
     tokenRegex.l = `(${self.l10n.weekdays.longhand.join("|")})`;
-    tokenRegex.M = "(" + self.l10n.months.shorthand.join("|") + "|" + self.l10n.months.shorthand.join("|").toLowerCase() + ")";
-    tokenRegex.F = "(" + self.l10n.months.longhand.join("|") + "|" + self.l10n.months.longhand.join("|").toLowerCase() + ")";
+    tokenRegex.M = "(" + self.l10n.months.shorthand.join("|") + ")";
+    tokenRegex.F = "(" + self.l10n.months.longhand.join("|") + ")";
     tokenRegex.K = `(${self.l10n.amPM[0]}|${
       self.l10n.amPM[1]
     }|${self.l10n.amPM[0].toLowerCase()}|${self.l10n.amPM[1].toLowerCase()})`;
