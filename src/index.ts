@@ -805,6 +805,8 @@ function FlatpickrInstance(
         : window.document.body
       ).appendChild(self.calendarContainer);
     }
+
+    manageElementsTabindex();
   }
 
   function createDay(
@@ -2033,33 +2035,35 @@ function FlatpickrInstance(
    * Method to manage the tabindex value of interactive elements, based if is open or closed
    */
   function manageElementsTabindex() {
+    const tabindexValue = self.isOpen || self.config.inline ? 0 : -1;
+
     if (self.monthsDropdownContainer !== undefined) {
-      self.monthsDropdownContainer.tabIndex = self.isOpen ? 0 : -1;
+      self.monthsDropdownContainer.tabIndex = tabindexValue;
     }
 
     if (self.currentYearElement !== undefined) {
-      self.currentYearElement.tabIndex = self.isOpen ? 0 : -1;
+      self.currentYearElement.tabIndex = tabindexValue;
     }
 
     if (self.nextMonthNav !== undefined) {
-      self.nextMonthNav.tabIndex = self.isOpen ? 0 : -1;
+      self.nextMonthNav.tabIndex = tabindexValue;
     }
 
     if (self.prevMonthNav !== undefined) {
-      self.prevMonthNav.tabIndex = self.isOpen ? 0 : -1;
+      self.prevMonthNav.tabIndex = tabindexValue;
     }
 
     if (self.hourElement !== undefined && self.minuteElement !== undefined) {
-      self.hourElement.tabIndex = self.isOpen ? 0 : -1;
-      self.minuteElement.tabIndex = self.isOpen ? 0 : -1;
+      self.hourElement.tabIndex = tabindexValue;
+      self.minuteElement.tabIndex = tabindexValue;
     }
 
     if (self.amPM !== undefined) {
-      self.amPM.tabIndex = self.isOpen ? 0 : -1;
+      self.amPM.tabIndex = tabindexValue;
     }
 
     if (self.todayDateElem !== undefined) {
-      self.todayDateElem.tabIndex = self.isOpen ? 0 : -1;
+      self.todayDateElem.tabIndex = tabindexValue;
     }
   }
 
