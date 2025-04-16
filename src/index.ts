@@ -735,7 +735,6 @@ function FlatpickrInstance(
           "div",
           "flatpickr-days"
         );
-        self.daysContainer.tabIndex = self.isOpen ? 0 : -1;
       }
 
       buildDays();
@@ -842,7 +841,7 @@ function FlatpickrInstance(
     }
 
     if (dateIsEnabled) {
-      dayElement.tabIndex = self.config.inline ? 0 : -1;
+      dayElement.tabIndex = -1;
       if (isDateSelected(date)) {
         dayElement.classList.add("selected");
         self.selectedDateElem = dayElement;
