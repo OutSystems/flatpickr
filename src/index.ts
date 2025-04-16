@@ -699,8 +699,10 @@ function FlatpickrInstance(
     );
     self.calendarContainer.id =
       "flatpickr-calendar-" + self.utils.generateUniqueId();
-    self.calendarContainer.setAttribute("role", "dialog");
-    self.calendarContainer.setAttribute("aria-modal", "true");
+    if(!self.config.inline) {
+      self.calendarContainer.setAttribute("role", "dialog");
+      self.calendarContainer.setAttribute("aria-modal", "true");
+    }
     self.calendarContainer.setAttribute(
       "aria-label",
       self.l10n.ariaLabelCalendar
