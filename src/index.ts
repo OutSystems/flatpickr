@@ -1500,6 +1500,10 @@ function FlatpickrInstance(
   }
 
   function close() {
+    if(self.config.inline) {
+      return;
+    }
+
     self.isOpen = false;
 
     if (!self.isMobile) {
