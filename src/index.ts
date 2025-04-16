@@ -842,7 +842,7 @@ function FlatpickrInstance(
     }
 
     if (dateIsEnabled) {
-      dayElement.tabIndex = -1;
+      dayElement.tabIndex = self.config.inline ? 0 : -1;
       if (isDateSelected(date)) {
         dayElement.classList.add("selected");
         self.selectedDateElem = dayElement;
@@ -882,7 +882,7 @@ function FlatpickrInstance(
     ) {
       self.weekNumbers.insertAdjacentHTML(
         "beforeend",
-        "<span class='flatpickr-day'>" + self.config.getWeek(date) + "</span>"
+        "<span class='flatpickr-day' aria-hidden='true'>" + self.config.getWeek(date) + "</span>"
       );
     }
 
