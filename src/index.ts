@@ -828,6 +828,7 @@ function FlatpickrInstance(
       "aria-label",
       self.formatDate(date, self.config.ariaDateFormat)
     );
+    dayElement.setAttribute("role", "button");
 
     if (
       className.indexOf("hidden") === -1 &&
@@ -1230,14 +1231,13 @@ function FlatpickrInstance(
     );
     self.nextMonthNav = createElement("span", "flatpickr-next-month");
 
-    self.prevMonthNav.tabIndex = self.isOpen ? 0 : -1;
-    self.nextMonthNav.tabIndex = self.isOpen ? 0 : -1;
-
     self.prevMonthNav.innerHTML = self.config.prevArrow;
     self.nextMonthNav.innerHTML = self.config.nextArrow;
 
     self.prevMonthNav.setAttribute("aria-label", self.l10n.prevMonth);
+    self.prevMonthNav.setAttribute("role", "button");
     self.nextMonthNav.setAttribute("aria-label", self.l10n.nextMonth);
+    self.nextMonthNav.setAttribute("role", "button");
 
     buildMonths();
 
