@@ -699,8 +699,10 @@ function FlatpickrInstance(
     );
     self.calendarContainer.id =
       "flatpickr-calendar-" + self.utils.generateUniqueId();
-    self.calendarContainer.setAttribute("role", "dialog");
-    self.calendarContainer.setAttribute("aria-modal", "true");
+    if(!self.config.inline) {
+      self.calendarContainer.setAttribute("role", "dialog");
+      self.calendarContainer.setAttribute("aria-modal", "true");
+    }
     self.calendarContainer.setAttribute(
       "aria-label",
       self.l10n.ariaLabelCalendar
@@ -733,7 +735,6 @@ function FlatpickrInstance(
           "div",
           "flatpickr-days"
         );
-        self.daysContainer.tabIndex = self.isOpen ? 0 : -1;
       }
 
       buildDays();
@@ -805,6 +806,8 @@ function FlatpickrInstance(
         : window.document.body
       ).appendChild(self.calendarContainer);
     }
+
+    manageElementsTabindex();
   }
 
   function createDay(
@@ -826,6 +829,7 @@ function FlatpickrInstance(
       "aria-label",
       self.formatDate(date, self.config.ariaDateFormat)
     );
+    dayElement.setAttribute("role", "button");
 
     if (
       className.indexOf("hidden") === -1 &&
@@ -877,7 +881,7 @@ function FlatpickrInstance(
     ) {
       self.weekNumbers.insertAdjacentHTML(
         "beforeend",
-        "<span class='flatpickr-day'>" + self.config.getWeek(date) + "</span>"
+        "<span class='flatpickr-day' aria-hidden='true'>" + self.config.getWeek(date) + "</span>"
       );
     }
 
@@ -1228,14 +1232,13 @@ function FlatpickrInstance(
     );
     self.nextMonthNav = createElement("span", "flatpickr-next-month");
 
-    self.prevMonthNav.tabIndex = self.isOpen ? 0 : -1;
-    self.nextMonthNav.tabIndex = self.isOpen ? 0 : -1;
-
     self.prevMonthNav.innerHTML = self.config.prevArrow;
     self.nextMonthNav.innerHTML = self.config.nextArrow;
 
     self.prevMonthNav.setAttribute("aria-label", self.l10n.prevMonth);
+    self.prevMonthNav.setAttribute("role", "button");
     self.nextMonthNav.setAttribute("aria-label", self.l10n.nextMonth);
+    self.nextMonthNav.setAttribute("role", "button");
 
     buildMonths();
 
@@ -1417,8 +1420,8 @@ function FlatpickrInstance(
 
     for (let i = self.config.showMonths; i--; ) {
       self.weekdayContainer.children[i].innerHTML = `
-      <span class='flatpickr-weekday'>
-        ${weekdays.join("</span><span class='flatpickr-weekday'>")}
+      <span class='flatpickr-weekday' aria-hidden='true'>
+        ${weekdays.join("</span><span class='flatpickr-weekday' aria-hidden='true'>")}
       </span>
       `;
     }
@@ -1497,6 +1500,10 @@ function FlatpickrInstance(
   }
 
   function close() {
+    if(self.config.inline) {
+      return;
+    }
+
     self.isOpen = false;
 
     if (!self.isMobile) {
@@ -2033,33 +2040,35 @@ function FlatpickrInstance(
    * Method to manage the tabindex value of interactive elements, based if is open or closed
    */
   function manageElementsTabindex() {
+    const tabindexValue = self.isOpen || self.config.inline ? 0 : -1;
+
     if (self.monthsDropdownContainer !== undefined) {
-      self.monthsDropdownContainer.tabIndex = self.isOpen ? 0 : -1;
+      self.monthsDropdownContainer.tabIndex = tabindexValue;
     }
 
     if (self.currentYearElement !== undefined) {
-      self.currentYearElement.tabIndex = self.isOpen ? 0 : -1;
+      self.currentYearElement.tabIndex = tabindexValue;
     }
 
     if (self.nextMonthNav !== undefined) {
-      self.nextMonthNav.tabIndex = self.isOpen ? 0 : -1;
+      self.nextMonthNav.tabIndex = tabindexValue;
     }
 
     if (self.prevMonthNav !== undefined) {
-      self.prevMonthNav.tabIndex = self.isOpen ? 0 : -1;
+      self.prevMonthNav.tabIndex = tabindexValue;
     }
 
     if (self.hourElement !== undefined && self.minuteElement !== undefined) {
-      self.hourElement.tabIndex = self.isOpen ? 0 : -1;
-      self.minuteElement.tabIndex = self.isOpen ? 0 : -1;
+      self.hourElement.tabIndex = tabindexValue;
+      self.minuteElement.tabIndex = tabindexValue;
     }
 
     if (self.amPM !== undefined) {
-      self.amPM.tabIndex = self.isOpen ? 0 : -1;
+      self.amPM.tabIndex = tabindexValue;
     }
 
     if (self.todayDateElem !== undefined) {
-      self.todayDateElem.tabIndex = self.isOpen ? 0 : -1;
+      self.todayDateElem.tabIndex = tabindexValue;
     }
   }
 
