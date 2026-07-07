@@ -1776,9 +1776,19 @@ function FlatpickrInstance(
 
     if (self.config.altInput) {
       const hiddenInputValue = self.element.getAttribute("value") as string;
+      // Parse the hidden value with flatpickr's own parser (local time) rather
+      // than new Date(), whose date-only ("Y-m-d") parsing is treated as UTC and
+      // therefore shifts to the previous day under negative timezone offsets,
+      // making a one-day-earlier manual entry look unchanged and suppressing
+      // onChange. undefined => no valid baseline => treat the value as changed.
+      const parsedHiddenDate = self.parseDate(
+        hiddenInputValue,
+        self.config.dateFormat
+      );
       valueChanged =
+        parsedHiddenDate === undefined ||
         self._input.value.trimEnd() !==
-        self.formatDate(new Date(hiddenInputValue), self.config.altFormat);
+          self.formatDate(parsedHiddenDate, self.config.altFormat);
     }
 
     if (
