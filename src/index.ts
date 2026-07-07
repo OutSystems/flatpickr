@@ -503,41 +503,20 @@ function FlatpickrInstance(
    * Method to focus on the first available day, when using tab+shift keys on the time input
    */
   function onTimeKeydown(e: KeyboardEvent) {
-    // Match e.key (modern) or the legacy e.keyCode, since some callers only set one.
-    const isTab = e.key === "Tab" || e.keyCode === 9;
-    if (!isTab) return;
-
-    // Shift+Tab out of the first time element re-enters the calendar
-    // (or altInput, when there's no calendar to return to).
-    if (document.activeElement === self.hourElement && e.shiftKey) {
-      e.preventDefault();
-      if (self.config.noCalendar || self.isMobile) {
-        self.altInput?.focus();
-      } else {
-        focusOnDay(getFirstAvailableDay(1), 0);
+    // Forward Tab navigation between the time elements is handled by the
+    // browser's native tab order (they are all tabindex=0 while open) and kept
+    // inside the calendar by the focus-trap elements. We only intervene for
+    // Shift+Tab out of the first time element, to send focus back into the
+    // calendar days (or the altInput when there is no calendar).
+    if (document.activeElement === self.hourElement && e.key === "Tab") {
+      if (e.shiftKey) {
+        e.preventDefault();
+        if (self.config.noCalendar || self.isMobile) {
+          self.altInput?.focus();
+        } else {
+          focusOnDay(getFirstAvailableDay(1), 0);
+        }
       }
-      return;
-    }
-
-    // Otherwise, Tab/Shift+Tab cycles focus across the time elements
-    // (hour, minute, second, AM/PM, plugin elements), falling back to
-    // the main input once the cycle runs out.
-    const eventTarget = getEventTarget(e);
-    const elems = ([
-      self.hourElement,
-      self.minuteElement,
-      self.secondElement,
-      self.amPM,
-    ] as Node[])
-      .concat(self.pluginElements)
-      .filter((x) => x) as HTMLInputElement[];
-
-    const i = elems.indexOf(eventTarget as HTMLInputElement);
-
-    if (i !== -1) {
-      const target = elems[i + (e.shiftKey ? -1 : 1)];
-      e.preventDefault();
-      (target || self._input).focus();
     }
   }
 

@@ -1791,85 +1791,92 @@ describe("flatpickr", () => {
       expect(fp._input.value).toEqual("");
     });
 
-    it("time-picker focuses out onto input", () => {
+    it("time-picker keeps keyboard focus trapped within the calendar", () => {
+      // The accessibility model relies on native tab order (all interactive
+      // elements are tabindex=0 while open) plus focus-trap elements that wrap
+      // focus at the calendar boundaries, keeping keyboard focus inside the
+      // open dialog rather than escaping to the input.
       createInstance({ mode: "time" });
       fp.open();
 
-      expect(fp.hourElement).toBeDefined();
-      expect(fp.minuteElement).toBeDefined();
-      expect(fp.amPM).toBeDefined();
+      const topTrap = fp.calendarContainer.querySelector(
+        ".focus-trap-top-element"
+      ) as HTMLElement;
+      const bottomTrap = fp.calendarContainer.querySelector(
+        ".focus-trap-bottom-element"
+      ) as HTMLElement;
 
-      if (!fp.hourElement || !fp.minuteElement || !fp.amPM) return;
+      expect(topTrap).not.toBeNull();
+      expect(bottomTrap).not.toBeNull();
+
+      // Interactive time elements are reachable via native tab order when open.
+      expect(fp.hourElement && fp.hourElement.tabIndex).toEqual(0);
+      expect(fp.minuteElement && fp.minuteElement.tabIndex).toEqual(0);
+      expect(fp.amPM && fp.amPM.tabIndex).toEqual(0);
+
+      // Tab past the bottom of the calendar wraps back to the top.
+      bottomTrap.focus();
+      simulate("keydown", bottomTrap, { key: "Tab" }, KeyboardEvent);
+      expect(document.activeElement).toStrictEqual(topTrap);
+
+      // Shift+Tab past the top of the calendar wraps to the bottom.
+      topTrap.focus();
+      simulate(
+        "keydown",
+        topTrap,
+        { key: "Tab", shiftKey: true },
+        KeyboardEvent
+      );
+      expect(document.activeElement).toStrictEqual(bottomTrap);
+    });
+
+    it("time-picker leaves forward tab navigation between time elements to the browser", () => {
+      // Guards against re-introducing the manual JS Tab-cycling that broke the
+      // focus trap: a forward Tab on a time element must NOT be intercepted and
+      // must NOT move focus programmatically (the browser's native tab order
+      // handles this). Only Shift+Tab out of the hour element is handled in JS.
+      createInstance({ mode: "time" });
+      fp.open();
+
+      expect(fp.minuteElement).toBeDefined();
+      if (!fp.minuteElement) return;
 
       fp.minuteElement.focus();
       expect(document.activeElement).toStrictEqual(fp.minuteElement);
 
-      simulate(
-        "keydown",
-        fp.minuteElement,
-        {
-          keyCode: 9, // Tab
-        },
-        KeyboardEvent
-      );
-      expect(document.activeElement).toStrictEqual(fp.amPM);
-
-      simulate(
-        "keydown",
-        fp.amPM,
-        {
-          keyCode: 9, // Tab
-          shiftKey: true,
-        },
-        KeyboardEvent
-      );
+      simulate("keydown", fp.minuteElement, { key: "Tab" }, KeyboardEvent);
+      // Focus is unchanged: the handler did not hijack the forward Tab.
       expect(document.activeElement).toStrictEqual(fp.minuteElement);
-
-      simulate(
-        "keydown",
-        fp.amPM,
-        {
-          keyCode: 9, // Tab
-        },
-        KeyboardEvent
-      );
-      expect(document.activeElement).toStrictEqual(fp._input);
     });
 
-    it("time-picker tabs forward through all time elements", () => {
-      // Guards against the regression where the time picker's forward Tab
-      // cycling (hour -> minute -> second -> AM/PM -> input) was removed and
-      // only Shift+Tab out of the hour element remained.
-      createInstance({ mode: "time", enableSeconds: true });
+    it("time-picker Shift+Tab from the hour element returns focus to the calendar", () => {
+      // The one time-navigation behavior the accessibility model keeps in JS:
+      // Shift+Tab out of the first time element goes back into the calendar
+      // days rather than to the previous element in document order.
+      createInstance({
+        enableTime: true,
+        defaultDate: "2016-12-27 13:00",
+      });
       fp.open();
 
       expect(fp.hourElement).toBeDefined();
-      expect(fp.minuteElement).toBeDefined();
-      expect(fp.secondElement).toBeDefined();
-      expect(fp.amPM).toBeDefined();
-
-      if (
-        !fp.hourElement ||
-        !fp.minuteElement ||
-        !fp.secondElement ||
-        !fp.amPM
-      )
-        return;
+      if (!fp.hourElement) return;
 
       fp.hourElement.focus();
       expect(document.activeElement).toStrictEqual(fp.hourElement);
 
-      simulate("keydown", fp.hourElement, { keyCode: 9 }, KeyboardEvent); // Tab
-      expect(document.activeElement).toStrictEqual(fp.minuteElement);
+      simulate(
+        "keydown",
+        fp.hourElement,
+        { key: "Tab", shiftKey: true },
+        KeyboardEvent
+      );
 
-      simulate("keydown", fp.minuteElement, { keyCode: 9 }, KeyboardEvent); // Tab
-      expect(document.activeElement).toStrictEqual(fp.secondElement);
-
-      simulate("keydown", fp.secondElement, { keyCode: 9 }, KeyboardEvent); // Tab
-      expect(document.activeElement).toStrictEqual(fp.amPM);
-
-      simulate("keydown", fp.amPM, { keyCode: 9 }, KeyboardEvent); // Tab
-      expect(document.activeElement).toStrictEqual(fp._input);
+      const activeElement = document.activeElement as HTMLElement;
+      expect(activeElement.classList.contains("flatpickr-day")).toEqual(true);
+      expect(fp.daysContainer && fp.daysContainer.contains(activeElement)).toEqual(
+        true
+      );
     });
 
     it("dropdown should correctly load months with minDate", () => {
