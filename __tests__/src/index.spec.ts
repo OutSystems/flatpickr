@@ -873,6 +873,59 @@ describe("flatpickr", () => {
       expect(fp.isOpen).toEqual(false);
     });
 
+    it("onKeyDown closes flatpickr on Enter when allowInput set to true (via e.key)", () => {
+      // Guards against the input handler matching only e.keyCode: a KeyboardEvent
+      // dispatched with just `key: "Enter"` (no keyCode) must still close.
+      createInstance({
+        enableTime: true,
+        allowInput: true,
+        altInput: true,
+      });
+
+      fp.jumpToDate("2016-2-1");
+
+      fp.open();
+      expect(fp.isOpen).toEqual(true);
+
+      simulate(
+        "keydown",
+        fp._input,
+        {
+          key: "Enter",
+        },
+        KeyboardEvent
+      );
+      expect(fp.isOpen).toEqual(false);
+    });
+
+    it("fires the onKeyDown hook exactly once for a keydown on the input", () => {
+      // Guards against the regression where input keydown handling was moved off
+      // the shared onKeyDown handler and stopped firing the onKeyDown hook, and
+      // against accidentally firing it twice.
+      let fired = 0;
+      createInstance({
+        onKeyDown: () => {
+          fired++;
+        },
+      });
+
+      fp._input.focus();
+      simulate("keydown", fp._input, { keyCode: 37 }, KeyboardEvent); // "ArrowLeft"
+
+      expect(fired).toEqual(1);
+    });
+
+    it("ArrowDown on the input opens the calendar", () => {
+      // clickOpens is disabled so focus doesn't open the calendar; this isolates
+      // the ArrowDown handler and guards its e.keyCode path.
+      createInstance({ clickOpens: false });
+      expect(fp.isOpen).toEqual(false);
+
+      simulate("keydown", fp._input, { keyCode: 40 }, KeyboardEvent); // "ArrowDown"
+
+      expect(fp.isOpen).toEqual(true);
+    });
+
     it("enabling dates by function", () => {
       createInstance({
         enable: [(d) => d.getDate() === 6, new Date()],
@@ -1783,6 +1836,42 @@ describe("flatpickr", () => {
       expect(document.activeElement).toStrictEqual(fp._input);
     });
 
+    it("time-picker tabs forward through all time elements", () => {
+      // Guards against the regression where the time picker's forward Tab
+      // cycling (hour -> minute -> second -> AM/PM -> input) was removed and
+      // only Shift+Tab out of the hour element remained.
+      createInstance({ mode: "time", enableSeconds: true });
+      fp.open();
+
+      expect(fp.hourElement).toBeDefined();
+      expect(fp.minuteElement).toBeDefined();
+      expect(fp.secondElement).toBeDefined();
+      expect(fp.amPM).toBeDefined();
+
+      if (
+        !fp.hourElement ||
+        !fp.minuteElement ||
+        !fp.secondElement ||
+        !fp.amPM
+      )
+        return;
+
+      fp.hourElement.focus();
+      expect(document.activeElement).toStrictEqual(fp.hourElement);
+
+      simulate("keydown", fp.hourElement, { keyCode: 9 }, KeyboardEvent); // Tab
+      expect(document.activeElement).toStrictEqual(fp.minuteElement);
+
+      simulate("keydown", fp.minuteElement, { keyCode: 9 }, KeyboardEvent); // Tab
+      expect(document.activeElement).toStrictEqual(fp.secondElement);
+
+      simulate("keydown", fp.secondElement, { keyCode: 9 }, KeyboardEvent); // Tab
+      expect(document.activeElement).toStrictEqual(fp.amPM);
+
+      simulate("keydown", fp.amPM, { keyCode: 9 }, KeyboardEvent); // Tab
+      expect(document.activeElement).toStrictEqual(fp._input);
+    });
+
     it("dropdown should correctly load months with minDate", () => {
       const fp = createInstance({
         defaultDate: new Date(2019, 5, 11),
@@ -1917,6 +2006,21 @@ describe("flatpickr", () => {
         fp._input.focus();
         simulate("blur", fp._input);
         expect(timesFired).toEqual(0);
+      });
+
+      it("still fires when a value was entered without altInput", () => {
+        // The counterpart to "doesn't misfire": the guard must not suppress a
+        // genuine change. A blur after typing a date should still save it.
+        let timesFired = 0;
+        const fp = createInstance({
+          allowInput: true,
+          onChange: () => timesFired++,
+        });
+        fp._input.focus();
+        fp._input.value = "2016-12-27";
+        simulate("blur", fp._input);
+        expect(timesFired).toEqual(1);
+        expect(fp.selectedDates.length).toEqual(1);
       });
     });
   });
