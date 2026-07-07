@@ -463,48 +463,51 @@ function FlatpickrInstance(
    * Method to trigger the picker container when pressing ArrowDown on the input
    */
   function onInputKeyDown(e: KeyboardEvent) {
-    switch (e.key) {
-      // Open Calendar and focus on available day
-      case "ArrowDown":
-        self.open();
-        if (self.config.noCalendar || self.isMobile) {
-          self.hourElement?.focus();
-        } else if (self.loadedPlugins.indexOf("monthSelect") !== -1) {
-          focusOnAvailableMonth();
-        } else {
-          focusOnDay(getFirstAvailableDay(1), 0);
-        }
-        break;
-      // Save the entered Date on the input
-      case "Enter":
-        if (
-          self.loadedPlugins.indexOf("monthSelect") !== -1 ||
-          (self.config.noCalendar && self.config.enableTime)
-        ) {
-          return;
-        }
+    // e.key is the modern way to identify the pressed key, but some callers
+    // (and older browsers) only set the legacy e.keyCode, so match on either.
+    const isArrowDown = e.key === "ArrowDown" || e.keyCode === 40;
+    const isEnter = e.key === "Enter" || e.keyCode === 13;
+    const isTab = e.key === "Tab" || e.keyCode === 9;
 
-        self._input.blur();
-        self.close();
-        
-        break;
+    // Open Calendar and focus on available day
+    if (isArrowDown) {
+      self.open();
+      if (self.config.noCalendar || self.isMobile) {
+        self.hourElement?.focus();
+      } else if (self.loadedPlugins.indexOf("monthSelect") !== -1) {
+        focusOnAvailableMonth();
+      } else {
+        focusOnDay(getFirstAvailableDay(1), 0);
+      }
+    } else if (isEnter) {
+      // Save the entered Date on the input
+      if (
+        self.loadedPlugins.indexOf("monthSelect") !== -1 ||
+        (self.config.noCalendar && self.config.enableTime)
+      ) {
+        triggerEvent("onKeyDown", e);
+        return;
+      }
+
+      self._input.blur();
+      self.close();
+    } else if (isTab) {
       // Close the calendar
-      case "Tab":
-        if (e.shiftKey) {
-          // Handle Shift+Tab combination
-          self.close();
-        } else {
-          // Just Tab: Close the calendar
-          self.close();
-        }
-        break;
+      self.close();
     }
+
+    triggerEvent("onKeyDown", e);
   }
 
   /**
    * Method to focus on the first available day, when using tab+shift keys on the time input
    */
   function onTimeKeydown(e: KeyboardEvent) {
+    // Forward Tab navigation between the time elements is handled by the
+    // browser's native tab order (they are all tabindex=0 while open) and kept
+    // inside the calendar by the focus-trap elements. We only intervene for
+    // Shift+Tab out of the first time element, to send focus back into the
+    // calendar days (or the altInput when there is no calendar).
     if (document.activeElement === self.hourElement && e.key === "Tab") {
       if (e.shiftKey) {
         e.preventDefault();
@@ -1779,6 +1782,12 @@ function FlatpickrInstance(
       valueChanged =
         self._input.value.trimEnd() !==
         self.formatDate(new Date(hiddenInputValue), self.config.altFormat);
+    } else {
+      // Without altInput there's no separate hidden value to diff against;
+      // only treat the blur as a change if there's actually a date selected
+      // or something typed, so blurring an untouched empty input is a no-op.
+      valueChanged =
+        self.selectedDates.length > 0 || self._input.value.length > 0;
     }
 
     if (
