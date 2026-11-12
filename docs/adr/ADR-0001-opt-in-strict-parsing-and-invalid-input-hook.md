@@ -35,6 +35,8 @@ Upstream Flatpickr has had no release since 4.6.13, and the lenient parsing is r
   change.
 - A caller's own `parseDate` keeps working.
 - Small, self-contained change, so it can be proposed upstream later.
+- Correcting typed input must never guess: a correction that picks one of several readings would recreate
+  the original problem.
 
 ## Considered Options
 
@@ -50,11 +52,20 @@ Upstream Flatpickr has had no release since 4.6.13, and the lenient parsing is r
   - Pros: no fork change.
   - Cons: each consumer has to tell typed text from config values, cannot see dates dropped as disabled,
     and has to restore the cleared text itself.
+- Option 4 — Opt-in auto-correction of typed text before it is rejected (complement to Option 2)
+  - Pros: dates typed without separators (`13122020`) or with other ones (`13/12/2020`) are accepted when
+    they can only be read one way, so fewer users see an error at all.
+  - Cons: one more rule set; it has to stay strict. A first version tried every split of the digits
+    (1 or 2 digits per day/month/hour) and kept a split when it gave a single valid date. Over a matrix of
+    formats this still produced surprising reads (`112020` as 1/1/2020), and with a time part it turned a
+    date typed without its time into another date (`13122020` for `d/m/Y - H:i` as 1/3/1220 - 2:0). The
+    rules were therefore narrowed to full-width values only.
 
 ## Decision Outcome
 
-Chosen option: "Option 2", because it is the only one that fixes typed input without changing any other
-parsing, and lets the caller react to both failure reasons.
+Chosen option: "Option 2", together with "Option 4". Option 2 is the only one that fixes typed input
+without changing any other parsing, and lets the caller react to both failure reasons. Option 4 accepts the
+most common mistyped form (digits without separators) without guessing.
 
 - **`strictInputParsing`** (boolean, default `false`). Typed text is parsed with `parseStrictInput`
   (`src/utils/dates.ts`) instead of the default parser:
@@ -92,6 +103,11 @@ parsing, and lets the caller react to both failure reasons.
 - The options are in `boolOpts`, so they can be passed as `data-` attributes like the other boolean options.
 - With all three options off, blur and Enter call `setDate` exactly as before.
 
+How OutSystems UI uses them (its ADR-0022): a single low-code switch, `StrictInputValidation` (off by
+default), turns on `strictInputParsing`, `keepInvalidInput` and `autoCorrectInput` together, for DatePicker and
+DatePickerRange only. MonthPicker and TimePicker do not use the options. OutSystems UI shows the invalid
+state and raises its own `OnInvalidInput` event from the hook.
+
 Positive consequences:
 
 - Typed text is either the date the user typed or rejected with a reason.
@@ -106,9 +122,21 @@ Negative consequences:
 - The fork diverges further from upstream; this change is a candidate to propose upstream.
 - A consumer that turns `keepInvalidInput` on must show the invalid state itself (the hook tells it when).
 
+Decisions taken so far, to confirm before the status changes to Accepted:
+
+- All new options are off by default; no behaviour change for consumers that don't turn them on.
+- Only the typing paths (blur, Enter) change; config values and `setDate` from code are parsed as before.
+- A custom `parseDate` always wins over the strict parser and the correction.
+- Range input is accepted or rejected as a whole (exactly two dates).
+- Rejected text can be kept in the input (`keepInvalidInput`); the selection is still cleared and
+  `onChange` still fires before `onInvalidInput`.
+- Disabled and out-of-range typed dates are reported (`reason: "disabled"`), not dropped silently.
+- Auto-correction: full-width values only (no single digits without separators), full numeric dates only,
+  never with `noCalendar`, month/year-only formats, names or AM/PM.
+
 ## Links
 
-- ROU-11357 (this decision), ROU-10854 (case-insensitive names, Enter key), ROU-12898 (change detection
+- ROU-11357 (this decision), ROU-13210 (shared input mask provider, investigated separately), ROU-10854 (case-insensitive names, Enter key), ROU-12898 (change detection
   on blur), ROU-12031, RPM-5943
 - OutSystems UI ADR-0022 (how OutSystems UI uses these options): https://github.com/OutSystems/outsystems-ui
 - Upstream issue about lenient parsing: https://github.com/flatpickr/flatpickr/issues/2444
