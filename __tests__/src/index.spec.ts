@@ -6,7 +6,12 @@ import { Russian } from "l10n/ru";
 import { Instance, DayElement } from "types/instance";
 import { Options, DateRangeLimit } from "types/options";
 import confirmDatePlugin from "plugins/confirmDate/confirmDate";
-import { getDefaultHours } from "utils/dates";
+import {
+  getDefaultHours,
+  parseStrictInput,
+  isStrictFormatSupported,
+} from "utils/dates";
+import { english } from "l10n/default";
 
 flatpickr.defaultConfig.animate = false;
 flatpickr.defaultConfig.closeOnSelect = true;
@@ -1916,6 +1921,228 @@ describe("flatpickr", () => {
         });
         fp._input.focus();
         simulate("blur", fp._input);
+        expect(timesFired).toEqual(0);
+      });
+    });
+  });
+
+  describe("strict input parsing", () => {
+    const ymd = (date: Date | undefined) =>
+      date === undefined
+        ? undefined
+        : `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+
+    describe("parseStrictInput()", () => {
+      it("parses a text that matches the format", () => {
+        expect(ymd(parseStrictInput("23-06-2024", "d-m-Y", english))).toEqual(
+          "2024-6-23"
+        );
+      });
+
+      it("accepts values without leading zeros", () => {
+        expect(ymd(parseStrictInput("1-7-2025", "d-m-Y", english))).toEqual(
+          "2025-7-1"
+        );
+      });
+
+      it("rejects digits without the format's separators", () => {
+        expect(parseStrictInput("23062024", "d-m-Y", english)).toBeUndefined();
+      });
+
+      it("rejects other separators and trailing text", () => {
+        expect(
+          parseStrictInput("23/06/2024", "d-m-Y", english)
+        ).toBeUndefined();
+        expect(
+          parseStrictInput("23-06-2024x", "d-m-Y", english)
+        ).toBeUndefined();
+      });
+
+      it("rejects dates that would roll over", () => {
+        expect(
+          parseStrictInput("31-02-2025", "d-m-Y", english)
+        ).toBeUndefined();
+        expect(
+          parseStrictInput("23-62-2024", "d-m-Y", english)
+        ).toBeUndefined();
+      });
+
+      it("accepts a leap day only in a leap year", () => {
+        expect(ymd(parseStrictInput("29-02-2024", "d-m-Y", english))).toEqual(
+          "2024-2-29"
+        );
+        expect(
+          parseStrictInput("29-02-2025", "d-m-Y", english)
+        ).toBeUndefined();
+      });
+
+      it("matches month and weekday names case-insensitively", () => {
+        expect(
+          ymd(parseStrictInput("10-jan-WED-2024", "d-M-D-Y", english))
+        ).toEqual("2024-1-10");
+        expect(
+          ymd(parseStrictInput("march 5, 2024", "F j, Y", english))
+        ).toEqual("2024-3-5");
+        expect(
+          parseStrictInput("10-jun-xyz-2024", "d-M-D-Y", english)
+        ).toBeUndefined();
+      });
+
+      it("parses 12h time with AM/PM", () => {
+        const midnight = parseStrictInput(
+          "10-01-2024 - 12:00 am",
+          "d-m-Y - h:i K",
+          english
+        ) as Date;
+        expect(midnight.getHours()).toEqual(0);
+
+        const afternoon = parseStrictInput(
+          "01:30 PM",
+          "h:i K",
+          english,
+          true
+        ) as Date;
+        expect(afternoon.getHours()).toEqual(13);
+        expect(afternoon.getMinutes()).toEqual(30);
+      });
+
+      it("rejects out-of-range time values", () => {
+        expect(parseStrictInput("24:00", "H:i", english, true)).toBeUndefined();
+        expect(parseStrictInput("10:60", "H:i", english, true)).toBeUndefined();
+        expect(
+          parseStrictInput("13:00 PM", "h:i K", english, true)
+        ).toBeUndefined();
+      });
+
+      it("parses month-only formats", () => {
+        expect(ymd(parseStrictInput("mar/2022", "M/Y", english))).toEqual(
+          "2022-3-1"
+        );
+      });
+
+      it("reports unsupported formats", () => {
+        expect(isStrictFormatSupported("d-m-Y H:i:S")).toEqual(true);
+        expect(isStrictFormatSupported("U")).toEqual(false);
+        expect(isStrictFormatSupported("\\W d-m-Y")).toEqual(true);
+      });
+    });
+
+    describe("typed input", () => {
+      const typeAndBlur = (fp: Instance, value: string) => {
+        fp._input.value = value;
+        simulate("blur", fp._input);
+      };
+
+      const createStrictInstance = (config?: Options) =>
+        createInstance({
+          allowInput: true,
+          altInput: true,
+          altFormat: "d-m-Y",
+          dateFormat: "Y-m-d",
+          strictInputParsing: true,
+          keepInvalidInput: true,
+          // An earlier test localizes the default locale to Russian (other range separator)
+          locale: english,
+          ...config,
+        });
+
+      it("selects a valid typed date", () => {
+        const fp = createStrictInstance();
+        typeAndBlur(fp, "23-06-2024");
+        expect(fp.selectedDates.length).toEqual(1);
+        expect(ymd(fp.selectedDates[0])).toEqual("2024-6-23");
+      });
+
+      it("rejects an unparsable text, keeps it and fires onInvalidInput after onChange", () => {
+        const events: string[] = [];
+        let invalidData: any;
+        const fp = createStrictInstance({
+          onChange: () => events.push("change"),
+          onInvalidInput: (_, __, ___, data) => {
+            events.push("invalid");
+            invalidData = data;
+          },
+        });
+
+        typeAndBlur(fp, "23062024");
+
+        expect(fp.selectedDates.length).toEqual(0);
+        expect(fp._input.value).toEqual("23062024");
+        expect(events).toEqual(["change", "invalid"]);
+        expect(invalidData).toEqual({
+          value: "23062024",
+          reason: "unparsable",
+        });
+      });
+
+      it("does not fire again when the same rejected text is blurred again", () => {
+        let timesFired = 0;
+        const fp = createStrictInstance({
+          onInvalidInput: () => timesFired++,
+        });
+
+        typeAndBlur(fp, "31-02-2025");
+        simulate("blur", fp._input);
+
+        expect(timesFired).toEqual(1);
+      });
+
+      it("clears the text when keepInvalidInput is off", () => {
+        const fp = createStrictInstance({ keepInvalidInput: false });
+        typeAndBlur(fp, "23062024");
+        expect(fp.selectedDates.length).toEqual(0);
+        expect(fp._input.value).toEqual("");
+      });
+
+      it("reports a date outside minDate as disabled", () => {
+        let invalidData: any;
+        const fp = createStrictInstance({
+          minDate: "2024-01-01",
+          onInvalidInput: (_, __, ___, data) => (invalidData = data),
+        });
+
+        typeAndBlur(fp, "23-06-2023");
+
+        expect(fp.selectedDates.length).toEqual(0);
+        expect(invalidData.reason).toEqual("disabled");
+      });
+
+      it("accepts or rejects a range as a whole", () => {
+        const fp = createStrictInstance({ mode: "range" });
+
+        typeAndBlur(fp, "01-06-2024 to 05-06-2024");
+        expect(fp.selectedDates.map(ymd)).toEqual(["2024-6-1", "2024-6-5"]);
+
+        typeAndBlur(fp, "01-06-2024 to 32-06-2024");
+        expect(fp.selectedDates.length).toEqual(0);
+        expect(fp._input.value).toEqual("01-06-2024 to 32-06-2024");
+
+        typeAndBlur(fp, "01-06-2024");
+        expect(fp.selectedDates.length).toEqual(0);
+      });
+
+      it("uses a custom parseDate instead of the strict parser", () => {
+        const fp = createStrictInstance({
+          parseDate: () => new Date(2024, 5, 23),
+        });
+
+        typeAndBlur(fp, "23062024");
+
+        expect(ymd(fp.selectedDates[0])).toEqual("2024-6-23");
+      });
+
+      it("keeps the default lenient parsing when the options are off", () => {
+        let timesFired = 0;
+        const fp = createStrictInstance({
+          strictInputParsing: false,
+          keepInvalidInput: false,
+          onInvalidInput: () => timesFired++,
+        });
+
+        typeAndBlur(fp, "23062024");
+
+        expect(fp.selectedDates.length).toEqual(1);
+        expect(ymd(fp.selectedDates[0])).not.toEqual("2024-6-23");
         expect(timesFired).toEqual(0);
       });
     });

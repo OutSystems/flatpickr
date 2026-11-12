@@ -124,6 +124,187 @@ export const createDateParser = ({ config = defaults, l10n = english }) => (
   return parsedDate;
 };
 
+const strictNumberTokens: Record<string, string> = {
+  d: "(\\d{1,2})",
+  j: "(\\d{1,2})",
+  m: "(\\d{1,2})",
+  n: "(\\d{1,2})",
+  Y: "(\\d{4})",
+  y: "(\\d{2})",
+  H: "(\\d{1,2})",
+  G: "(\\d{1,2})",
+  h: "(\\d{1,2})",
+  i: "(\\d{1,2})",
+  S: "(\\d{1,2})",
+  s: "(\\d{1,2})",
+};
+
+const strictNameTokens = ["M", "F", "D", "l", "K"];
+
+const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const namesRegex = (names: string[]) => `(${names.map(escapeRegex).join("|")})`;
+
+const indexOfName = (names: string[], value: string) =>
+  names.map((name) => name.toLowerCase()).indexOf(value.toLowerCase());
+
+/**
+ * Whether every token of the given format is supported by parseStrictInput
+ */
+export const isStrictFormatSupported = (format: string): boolean => {
+  for (let i = 0; i < format.length; i++) {
+    if (format[i] === "\\") {
+      i++;
+      continue;
+    }
+
+    const isToken =
+      (tokenRegex as Record<string, string>)[format[i]] !== undefined;
+    if (
+      isToken &&
+      strictNumberTokens[format[i]] === undefined &&
+      strictNameTokens.indexOf(format[i]) === -1
+    )
+      return false;
+  }
+
+  return true;
+};
+
+/**
+ * Parse text typed by the user strictly against the given format.
+ * Unlike the default parser, the whole text must match (literals included), every token must be present,
+ * values must be in range and dates that would roll over (e.g. 31-02) are rejected.
+ * Month, weekday and AM/PM names are case-insensitive. Weekday names are not checked against the date.
+ * Returns undefined when the text is not a valid date for the format.
+ */
+export const parseStrictInput = (
+  input: string,
+  format: string,
+  locale: Locale,
+  noCalendar = false
+): Date | undefined => {
+  const groups: token[] = [];
+  let regexStr = "";
+
+  for (let i = 0; i < format.length; i++) {
+    const char = format[i];
+
+    if (char === "\\") {
+      if (i + 1 < format.length) regexStr += escapeRegex(format[++i]);
+      continue;
+    }
+
+    if (strictNumberTokens[char] !== undefined) {
+      regexStr += strictNumberTokens[char];
+      groups.push(char as token);
+    } else if (char === "M") {
+      regexStr += namesRegex(locale.months.shorthand);
+      groups.push(char);
+    } else if (char === "F") {
+      regexStr += namesRegex(locale.months.longhand);
+      groups.push(char);
+    } else if (char === "D") {
+      regexStr += namesRegex(locale.weekdays.shorthand);
+      groups.push(char);
+    } else if (char === "l") {
+      regexStr += namesRegex(locale.weekdays.longhand);
+      groups.push(char);
+    } else if (char === "K") {
+      regexStr += namesRegex(locale.amPM);
+      groups.push(char);
+    } else if ((tokenRegex as Record<string, string>)[char] !== undefined) {
+      // Token not supported by the strict parser (e.g. U, Z, W)
+      return undefined;
+    } else {
+      regexStr += escapeRegex(char);
+    }
+  }
+
+  const match = new RegExp(`^${regexStr}$`, "i").exec(input.trim());
+  if (match === null) return undefined;
+
+  const base = noCalendar
+    ? new Date(new Date().setHours(0, 0, 0, 0))
+    : new Date(new Date().getFullYear(), 0, 1, 0, 0, 0, 0);
+
+  let year = base.getFullYear(),
+    month = base.getMonth(),
+    day = base.getDate(),
+    hours = 0,
+    minutes = 0,
+    seconds = 0,
+    hours12: number | undefined,
+    isPM: boolean | undefined;
+
+  for (let g = 0; g < groups.length; g++) {
+    const value = match[g + 1];
+    const num = parseInt(value, 10);
+
+    switch (groups[g]) {
+      case "d":
+      case "j":
+        if (num < 1 || num > 31) return undefined;
+        day = num;
+        break;
+      case "m":
+      case "n":
+        if (num < 1 || num > 12) return undefined;
+        month = num - 1;
+        break;
+      case "M":
+        month = indexOfName(locale.months.shorthand, value);
+        break;
+      case "F":
+        month = indexOfName(locale.months.longhand, value);
+        break;
+      case "Y":
+        year = num;
+        break;
+      case "y":
+        year = 2000 + num;
+        break;
+      case "H":
+      case "G":
+        if (num > 23) return undefined;
+        hours = num;
+        break;
+      case "h":
+        if (num < 1 || num > 12) return undefined;
+        hours12 = num;
+        break;
+      case "i":
+        if (num > 59) return undefined;
+        minutes = num;
+        break;
+      case "S":
+      case "s":
+        if (num > 59) return undefined;
+        seconds = num;
+        break;
+      case "K":
+        isPM = indexOfName(locale.amPM, value) === 1;
+        break;
+    }
+  }
+
+  if (hours12 !== undefined) hours = (hours12 % 12) + (isPM ? 12 : 0);
+  else if (isPM !== undefined && hours < 12 && isPM) hours += 12;
+
+  const parsedDate = new Date(2000, month, day, hours, minutes, seconds, 0);
+  parsedDate.setFullYear(year, month, day);
+
+  // Reject dates that rolled over (e.g. 31-02 becomes 03-03)
+  if (
+    parsedDate.getFullYear() !== year ||
+    parsedDate.getMonth() !== month ||
+    parsedDate.getDate() !== day
+  )
+    return undefined;
+
+  return parsedDate;
+};
+
 /**
  * Compute the difference in dates, measured in ms
  */
