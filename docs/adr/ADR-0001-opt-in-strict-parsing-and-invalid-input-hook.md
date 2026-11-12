@@ -74,22 +74,35 @@ parsing, and lets the caller react to both failure reasons.
 - **`keepInvalidInput`** (boolean, default `false`). When typed text is rejected, the selection is cleared
   and `onChange` fires as before, but the text stays in the input so the user can correct it. Blurring
   again with the same rejected text does nothing (no repeated clear or hook call).
+- **`autoCorrectInput`** (boolean, default `false`). Before typed text that does not match the format is
+  rejected, `autoCorrectInput` (`src/utils/dates.ts`) tries to rebuild it with the format's separators:
+  - Digits typed without separators: every token takes its full width (2 digits, 4 for `Y`), so the
+    number of digits must match the format exactly and the split is fixed; single-digit days, months or
+    hours are not accepted, so nothing is guessed. `13122020` becomes `13-12-2020` for `d-m-Y`;
+    `1312020` is not corrected.
+  - Digit groups with other separators (`13/12/2020`, `13.12.2020`, `1/7/2025` for `d-m-Y`): rebuilt when
+    there is one group per token.
+  - Only for full numeric dates (a day, a month and a year token, optionally with a time). Not for
+    month/year-only formats (MonthPicker), time-only pickers (`noCalendar`), month/weekday names or AM/PM.
+  - Only when the text does not already match strictly, and never with a custom `parseDate`. Text that still
+    can't be read is rejected as before.
 - **`onInvalidInput` hook.** Fires after `onChange` when typed text is rejected, with
   `{ value, reason }` as the fourth argument. `reason` is `"unparsable"` (does not match the format) or
-  `"disabled"` (disabled or outside `minDate`/`maxDate`). Fires when either option is on.
-- Both options are in `boolOpts`, so they can be passed as `data-` attributes like the other boolean
-  options.
-- With both options off, blur and Enter call `setDate` exactly as before.
+  `"disabled"` (disabled or outside `minDate`/`maxDate`). Fires when any of the options is on.
+- The options are in `boolOpts`, so they can be passed as `data-` attributes like the other boolean options.
+- With all three options off, blur and Enter call `setDate` exactly as before.
 
 Positive consequences:
 
 - Typed text is either the date the user typed or rejected with a reason.
 - No behaviour change for consumers that do not turn the options on.
-- The parser is covered by unit tests (`__tests__/src/index.spec.ts`, "strict input parsing").
+- Dates typed without separators, or with other ones, are accepted when they can only be read one way.
+- The parser and the correction are covered by unit tests (`__tests__/src/index.spec.ts`, "strict input
+  parsing" and "auto-correct typed input").
 
 Negative consequences:
 
-- A second parser to keep in step with token support in `createDateParser`.
+- A second parser, and the correction, to keep in step with token support in `createDateParser`.
 - The fork diverges further from upstream; this change is a candidate to propose upstream.
 - A consumer that turns `keepInvalidInput` on must show the invalid state itself (the hook tells it when).
 
@@ -102,4 +115,4 @@ Negative consequences:
 
 ## Date
 
-2026-11-09
+2026-11-12

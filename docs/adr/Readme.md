@@ -28,4 +28,4 @@ Each ADR should follow the template in `ADR-0000-Title-of-ADR.md` (the same temp
 | ADR Number | Title                                                          | Status   | Date       |
 | :--------- | :------------------------------------------------------------- | :------- | :--------- |
 | ADR-0000   | Template for ADRs                                              | Meta     | 2026-11-09 |
-| ADR-0001   | Opt-in strict parsing and an invalid-input hook for typed text | Proposed | 2026-11-09 |
+| ADR-0001   | Opt-in strict parsing and an invalid-input hook for typed text | Proposed | 2026-11-12 |
