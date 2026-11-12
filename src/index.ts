@@ -34,6 +34,7 @@ import {
   parseSeconds,
   parseStrictInput,
   isStrictFormatSupported,
+  autoCorrectInput,
 } from "./utils/dates";
 
 import { tokenRegex, monthToStr } from "./utils/formatting";
@@ -1777,12 +1778,18 @@ function FlatpickrInstance(
 
   /**
    * Set the date from the text typed by the user (allowInput), on blur or Enter.
+   * With autoCorrectInput, text that doesn't match the format is first corrected when that gives one valid date
+   * (e.g. "13122020" becomes "13-12-2020" for "d-m-Y").
    * With strictInputParsing or keepInvalidInput, a text that can't be parsed, or a date that is disabled or
    * outside minDate/maxDate, clears the selection, fires onChange and then onInvalidInput.
    * Without those options it behaves as setDate.
    */
   function setDateFromInput(value: string, format: string) {
-    if (!self.config.strictInputParsing && !self.config.keepInvalidInput) {
+    if (
+      !self.config.strictInputParsing &&
+      !self.config.keepInvalidInput &&
+      !self.config.autoCorrectInput
+    ) {
       self.setDate(value, true, format);
       return;
     }
@@ -1807,7 +1814,27 @@ function FlatpickrInstance(
       self.config.parseDate === undefined &&
       isStrictFormatSupported(format);
 
-    const dates = parts.map((part) =>
+    // Try to correct the typed text first; only text that still can't be read is rejected
+    const correctPart = (part: string) => {
+      if (
+        !self.config.autoCorrectInput ||
+        self.config.noCalendar ||
+        self.config.parseDate !== undefined ||
+        parseStrictInput(part, format, self.l10n, self.config.noCalendar) !==
+          undefined
+      )
+        return part;
+
+      const corrected = autoCorrectInput(
+        part,
+        format,
+        self.l10n,
+        self.config.noCalendar
+      );
+      return corrected !== undefined ? corrected : part;
+    };
+
+    const dates = parts.map(correctPart).map((part) =>
       useStrictParser
         ? parseStrictInput(part, format, self.l10n, self.config.noCalendar)
         : self.parseDate(part.trim(), format)
@@ -2271,6 +2298,7 @@ function FlatpickrInstance(
       "updateInputVal",
       "strictInputParsing",
       "keepInvalidInput",
+      "autoCorrectInput",
     ];
 
     const userConfig = {

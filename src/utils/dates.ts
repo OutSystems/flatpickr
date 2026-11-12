@@ -305,6 +305,118 @@ export const parseStrictInput = (
   return parsedDate;
 };
 
+// Number of digits each numeric token takes when a date is typed without separators.
+// Always the full width, never a single digit: the digits are then split in exactly one way, nothing is guessed.
+const autoCorrectTokenWidths: Record<string, number> = {
+  d: 2,
+  j: 2,
+  m: 2,
+  n: 2,
+  H: 2,
+  G: 2,
+  h: 2,
+  i: 2,
+  S: 2,
+  s: 2,
+  Y: 4,
+  y: 2,
+};
+
+type FormatSegment = { token?: string; literal?: string };
+
+// Split a format into tokens and literals; undefined when a token can't be typed as digits
+const splitNumericFormat = (format: string): FormatSegment[] | undefined => {
+  const segments: FormatSegment[] = [];
+
+  for (let i = 0; i < format.length; i++) {
+    const char = format[i];
+
+    if (char === "\\") {
+      if (i + 1 < format.length) segments.push({ literal: format[++i] });
+      continue;
+    }
+
+    if (autoCorrectTokenWidths[char] !== undefined)
+      segments.push({ token: char });
+    else if ((tokenRegex as Record<string, string>)[char] !== undefined)
+      return undefined;
+    else segments.push({ literal: char });
+  }
+
+  return segments;
+};
+
+// Rebuild the text from one value per token, with the format's own literals
+const joinWithLiterals = (segments: FormatSegment[], values: string[]) => {
+  let index = 0;
+  return segments
+    .map((segment) =>
+      segment.token !== undefined ? values[index++] : segment.literal
+    )
+    .join("");
+};
+
+// Whether the format is a full calendar date: a day, a month and a year (a time part is allowed)
+const isFullDateFormat = (tokens: string[]) =>
+  tokens.some((token) => token === "d" || token === "j") &&
+  tokens.some((token) => token === "m" || token === "n") &&
+  tokens.some((token) => token === "Y" || token === "y");
+
+/**
+ * Try to turn a date typed without the format's separators into text that matches the format.
+ * - Digits only (e.g. "13122020" for "d-m-Y"): every token takes its full width (2 digits, 4 for Y), so the
+ *   number of digits must match the format exactly; single-digit days, months or hours are not accepted.
+ *   "13122020" becomes "13-12-2020"; "1312020" is not corrected.
+ * - Digit groups with other separators (e.g. "13/12/2020", "13.12.2020" or "1/7/2025" for "d-m-Y"): when
+ *   there is one group per token, the groups are joined with the format's separators.
+ * Only for full dates (a day, a month and a year token, optionally with a time) made of numeric tokens, and
+ * never for time-only pickers (noCalendar): month/year-only formats, times, month/weekday names and AM/PM are
+ * not corrected.
+ * Returns undefined when the text can't be corrected into a valid date.
+ */
+export const autoCorrectInput = (
+  input: string,
+  format: string,
+  locale: Locale,
+  noCalendar = false
+): string | undefined => {
+  if (noCalendar) return undefined;
+
+  const segments = splitNumericFormat(format);
+  if (segments === undefined) return undefined;
+
+  const tokens = segments
+    .filter((segment) => segment.token !== undefined)
+    .map((segment) => segment.token as string);
+  if (!isFullDateFormat(tokens)) return undefined;
+
+  const text = input.trim();
+  let values: string[];
+
+  if (/^\d+(?:[^\dA-Za-z]+\d+)+$/.test(text)) {
+    // Digit groups with any other separators
+    values = text.split(/[^\d]+/);
+    if (values.length !== tokens.length) return undefined;
+  } else if (/^\d+$/.test(text)) {
+    // Digits only: split by the full width of each token
+    const widths = tokens.map((token) => autoCorrectTokenWidths[token]);
+    if (widths.reduce((sum, width) => sum + width, 0) !== text.length)
+      return undefined;
+
+    let offset = 0;
+    values = widths.map((width) => {
+      const value = text.substr(offset, width);
+      offset += width;
+      return value;
+    });
+  } else return undefined;
+
+  const candidate = joinWithLiterals(segments, values);
+  return parseStrictInput(candidate, format, locale) !== undefined
+    ? candidate
+    : undefined;
+};
+
 /**
  * Compute the difference in dates, measured in ms
  */
