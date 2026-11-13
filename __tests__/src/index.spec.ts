@@ -2457,6 +2457,61 @@ describe("flatpickr", () => {
           ]);
         });
 
+        it("does not reject a same-day range shown as a single date", () => {
+          const invalid: any[] = [];
+          const fp = createAutoCorrectInstance({
+            mode: "range",
+            defaultDate: ["2020-12-13", "2020-12-13"],
+            onInvalidInput: (_, __, ___, data) => invalid.push(data),
+          });
+
+          typeAndClickOutside(fp, fp._input.value);
+
+          expect(fp.selectedDates.map(ymd)).toEqual([
+            "2020-12-13",
+            "2020-12-13",
+          ]);
+          expect(fp._input.value).toEqual("13-12-2020");
+          expect(invalid).toEqual([]);
+        });
+
+        it("does not report the same rejected text again after reopening", () => {
+          const invalid: any[] = [];
+          let changes = 0;
+          const fp = createAutoCorrectInstance({
+            onInvalidInput: (_, __, ___, data) => invalid.push(data),
+            onChange: () => changes++,
+          });
+
+          typeAndClickOutside(fp, "abc");
+          typeAndClickOutside(fp, "abc");
+
+          expect(fp._input.value).toEqual("abc");
+          expect(invalid).toEqual([{ value: "abc", reason: "unparsable" }]);
+          expect(changes).toEqual(1);
+        });
+
+        it("keeps the rejected text when a focused time field blurs after the click", () => {
+          const fp = createDateTimeInstance();
+
+          typeAndClickOutside(fp, "abc");
+          simulate("blur", fp.hourElement as HTMLInputElement, {}, FocusEvent);
+
+          expect(fp.selectedDates.length).toEqual(0);
+          expect(fp._input.value).toEqual("abc");
+        });
+
+        it("still applies a time edit made while the calendar is open", () => {
+          const fp = createDateTimeInstance();
+
+          fp.isOpen = true;
+          (fp.hourElement as HTMLInputElement).value = "15";
+          simulate("blur", fp.hourElement as HTMLInputElement, {}, FocusEvent);
+
+          expect(fp.selectedDates.length).toEqual(1);
+          expect(fp.selectedDates[0].getHours()).toEqual(15);
+        });
+
         it("keeps the previous lenient behaviour when the options are off", () => {
           const fp = createDateTimeInstance({
             strictInputParsing: false,

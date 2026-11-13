@@ -85,8 +85,10 @@ most common mistyped form (digits without separators) without guessing.
     always wins.
   - In range mode the text must contain exactly two dates.
 - **`keepInvalidInput`** (boolean, default `false`). When typed text is rejected, the selection is cleared
-  and `onChange` fires as before, but the text stays in the input so the user can correct it. Blurring
-  again with the same rejected text does nothing (no repeated clear or hook call).
+  and `onChange` fires as before, but the text stays in the input so the user can correct it. Leaving the
+  input again with the same rejected text (blur, Enter, or clicking outside after reopening the calendar) does
+  nothing: no repeated clear, `onChange` or hook call. At first only blur checked this, so clicking outside
+  reported the same text again (found in review).
   Before (and with the option off, as upstream), rejected text did not stay: Flatpickr emptied the input or put
   back the previous value, so the input never showed text that wasn't the selected date. With the option on,
   the input shows the typed text while the selection is empty, until the user corrects it.
@@ -118,7 +120,13 @@ most common mistyped form (digits without separators) without guessing.
   the open calendar (`documentClick`). The last one was missed at first: it still used the lenient `setDate`,
   so with a date-and-time picker (whose calendar stays open while typing) `121220201520` was read as
   12-10-2016 00:00. After a rejection on that path, `updateTime` is skipped, since it would otherwise select
-  today's date.
+  today's date. For the same reason, the blur of a focused hour/minute field that follows the outside click is
+  ignored while the calendar is closed and the rejected text is still in the input (found in review); time
+  edits while the calendar is open work as before.
+- Text that is exactly what Flatpickr shows for the current selection is not read back as typed input. A
+  same-day date-only range is shown as a single date, which strict parsing would reject as a range with one
+  date (found in review: reopening the calendar and clicking outside cleared a valid range). With the options
+  off, upstream still clears that range on an outside click; that path is unchanged.
 - With all three options off, the three paths call `setDate` exactly as before (`documentClick` without
   triggering change, as upstream).
 

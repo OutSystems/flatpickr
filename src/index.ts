@@ -230,6 +230,16 @@ function FlatpickrInstance(
   function updateTime(
     e?: MouseEvent | IncrementEvent | KeyboardEvent | FocusEvent
   ) {
+    // A click outside that rejected the typed text closes the calendar with the selection empty; the blur of a
+    // focused time field that follows must not select a default date over the kept text
+    if (
+      e !== undefined &&
+      e.type === "blur" &&
+      !self.isOpen &&
+      isRejectedInputKept()
+    )
+      return;
+
     if (self.selectedDates.length === 0) {
       const defaultDate =
         self.config.minDate === undefined ||
@@ -1781,6 +1791,16 @@ function FlatpickrInstance(
   // Text typed by the user that was last rejected, to avoid rejecting it again on every blur
   let lastInvalidInput: string | undefined;
 
+  // The last rejected text is still in the input and nothing was selected since
+  function isRejectedInputKept() {
+    return (
+      self.config.keepInvalidInput &&
+      lastInvalidInput !== undefined &&
+      self.selectedDates.length === 0 &&
+      self._input.value === lastInvalidInput
+    );
+  }
+
   /**
    * Set the date from the text typed by the user (allowInput), on blur or Enter.
    * With autoCorrectInput, text that doesn't match the format is first corrected when that gives one valid date
@@ -1802,6 +1822,14 @@ function FlatpickrInstance(
       self.setDate(value, triggerChange, format);
       return true;
     }
+
+    // The text shown for the current selection was not typed: don't read it back (a same-day range shows a
+    // single date, which would be rejected as a range with one date)
+    if (self.selectedDates.length > 0 && value === getDateStr(format))
+      return true;
+
+    // The same rejected text again (e.g. clicking outside after reopening): don't reject and report it twice
+    if (isRejectedInputKept() && value === lastInvalidInput) return false;
 
     const text = value.trim();
 
@@ -1890,12 +1918,7 @@ function FlatpickrInstance(
     let valueChanged = true;
 
     // The same rejected text is still in the input: nothing to do
-    if (
-      self.config.keepInvalidInput &&
-      lastInvalidInput !== undefined &&
-      self._input.value === lastInvalidInput
-    )
-      return;
+    if (isRejectedInputKept()) return;
 
     if (self.config.altInput) {
       const hiddenInputValue = self.element.getAttribute("value") as string;
