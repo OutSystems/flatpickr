@@ -6,8 +6,9 @@ Proposed
 
 ## Context
 
-With `allowInput: true`, Flatpickr parses the text typed in the input when it loses focus or Enter is
-pressed (`onBlur` and `onKeyDown` call `setDate(input.value, true, format)`). The default parser
+With `allowInput: true`, Flatpickr parses the text typed in the input when it loses focus, Enter is pressed,
+or the user clicks outside the open calendar (`onBlur` and `onKeyDown` call `setDate(input.value, true, format)`,
+`documentClick` calls `setDate(input.value, false, format)`). The default parser
 (`createDateParser` in `src/utils/dates.ts`) is built to be forgiving, which is wrong for typed text:
 
 - Every literal in the format becomes `.` in the regex, so `23/06/2024` matches `d-m-Y`.
@@ -45,16 +46,16 @@ Upstream Flatpickr has had no release since 4.6.13, and the lenient parsing is r
   - Cons: changes parsing of config values and `setDate` calls for everyone; breaking for upstream-style
     usage that relies on the leniency (for example `parseDate` fallbacks, shorthand strings).
 - Option 2 — Opt-in options that apply only to typed text, plus a hook
-  - Pros: only the typing paths (blur, Enter, clicking outside the open calendar) change, and only when turned on. Knows every failure reason.
-    Range and multiple input are accepted or rejected as a whole.
+  - Pros: only the typing paths (blur, Enter, clicking outside the open calendar) change, and only when
+    turned on. Knows every failure reason. Range and multiple input are accepted or rejected as a whole.
   - Cons: a second parser to maintain next to `createDateParser`; more divergence from upstream.
 - Option 3 — Leave the library as is; consumers pass a strict `parseDate`
   - Pros: no fork change.
   - Cons: each consumer has to tell typed text from config values, cannot see dates dropped as disabled,
     and has to restore the cleared text itself.
 - Option 4 — Opt-in auto-correction of typed text before it is rejected (complement to Option 2)
-  - Pros: dates typed without separators (`13122020`) or with other ones (`13/12/2020`) are accepted when
-    they can only be read one way, so fewer users see an error at all.
+  - Pros: dates typed without separators (`13122020`), with other ones (`13/12/2020`) or a mix of both
+    (`12122020 15:20`) are accepted when they can only be read one way, so fewer users see an error at all.
   - Cons: one more rule set; it has to stay strict. A first version tried every split of the digits
     (1 or 2 digits per day/month/hour) and kept a split when it gave a single valid date. Over a matrix of
     formats this still produced surprising reads (`112020` as 1/1/2020), and with a time part it turned a
@@ -77,7 +78,8 @@ most common mistyped form (digits without separators) without guessing.
     checked against the date.
   - Values out of range (day 32, month 13, hour 24, minute 60) are rejected, and so is a date that rolls
     over (`31-02`).
-  - Missing parts default to January 1 of the current year at 00:00; with `noCalendar`, to today.
+  - Parts that are not in the format default to January 1 of the current year at 00:00 (for example the
+    year for `d-m`, the time for `d-m-Y`); with `noCalendar`, the date defaults to today.
   - If the format has a token the strict parser does not support (`U`, `Z`, `W`…), or a custom
     `parseDate` is set, the parser in use is the one Flatpickr would use anyway. A custom `parseDate`
     always wins.
@@ -126,7 +128,8 @@ Positive consequences:
 
 - Typed text is either the date the user typed or rejected with a reason.
 - No behaviour change for consumers that do not turn the options on.
-- Dates typed without separators, or with other ones, are accepted when they can only be read one way.
+- Dates typed without separators, with other ones, or a mix of both, are accepted when they can only be
+  read one way.
 - The parser and the correction are covered by unit tests (`__tests__/src/index.spec.ts`, "strict input
   parsing" and "auto-correct typed input").
 
@@ -154,11 +157,12 @@ Decisions taken so far, to confirm before the status changes to Accepted:
 
 ## Links
 
-- ROU-11357 (this decision), ROU-13210 (shared input mask provider, investigated separately), ROU-10854 (case-insensitive names, Enter key), ROU-12898 (change detection
-  on blur), ROU-12031, RPM-5943
-- OutSystems UI ADR-0022 (how OutSystems UI uses these options): https://github.com/OutSystems/outsystems-ui
+- ROU-11357 (this decision), ROU-13210 (shared input mask provider, investigated separately), ROU-10854
+  (case-insensitive names, Enter key), ROU-12898 (change detection on blur), ROU-12031, RPM-5943
+- OutSystems UI ADR-0022 (how OutSystems UI uses these options): https://github.com/OutSystems/outsystems-ui,
+  `docs-internal/adr/ADR-0022-strict-typed-date-parsing-and-invalid-state.md`
 - Upstream issue about lenient parsing: https://github.com/flatpickr/flatpickr/issues/2444
 
 ## Date
 
-2026-11-12
+2026-11-13
