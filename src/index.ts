@@ -1849,7 +1849,14 @@ function FlatpickrInstance(
         : self.parseDate(part.trim(), format)
     );
 
-    let reason: "unparsable" | "disabled" | undefined;
+    let reason: "unparsable" | "outOfRange" | "disabled" | undefined;
+
+    // Before minDate or after maxDate, compared with the time as isEnabled(date, false) does
+    const isOutOfRange = (date: Date) =>
+      (self.config.minDate !== undefined &&
+        compareDates(date, self.config.minDate, false) < 0) ||
+      (self.config.maxDate !== undefined &&
+        compareDates(date, self.config.maxDate, false) > 0);
 
     if (
       dates.some((date) => date === undefined) ||
@@ -1858,6 +1865,8 @@ function FlatpickrInstance(
         dates.length !== 2)
     )
       reason = "unparsable";
+    else if (dates.some((date) => isOutOfRange(date as Date)))
+      reason = "outOfRange";
     else if (dates.some((date) => !isEnabled(date as Date, false)))
       reason = "disabled";
 

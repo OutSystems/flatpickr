@@ -45,7 +45,7 @@ Upstream Flatpickr has had no release since 4.6.13, and the lenient parsing is r
   - Cons: changes parsing of config values and `setDate` calls for everyone; breaking for upstream-style
     usage that relies on the leniency (for example `parseDate` fallbacks, shorthand strings).
 - Option 2 — Opt-in options that apply only to typed text, plus a hook
-  - Pros: only the typing paths (blur, Enter, clicking outside the open calendar) change, and only when turned on. Knows both failure reasons.
+  - Pros: only the typing paths (blur, Enter, clicking outside the open calendar) change, and only when turned on. Knows every failure reason.
     Range and multiple input are accepted or rejected as a whole.
   - Cons: a second parser to maintain next to `createDateParser`; more divergence from upstream.
 - Option 3 — Leave the library as is; consumers pass a strict `parseDate`
@@ -64,7 +64,7 @@ Upstream Flatpickr has had no release since 4.6.13, and the lenient parsing is r
 ## Decision Outcome
 
 Chosen option: "Option 2", together with "Option 4". Option 2 is the only one that fixes typed input
-without changing any other parsing, and lets the caller react to both failure reasons. Option 4 accepts the
+without changing any other parsing, and lets the caller react to each failure reason. Option 4 accepts the
 most common mistyped form (digits without separators) without guessing.
 
 - **`strictInputParsing`** (boolean, default `false`). Typed text is parsed with `parseStrictInput`
@@ -105,8 +105,9 @@ most common mistyped form (digits without separators) without guessing.
   - Only when the text does not already match strictly, and never with a custom `parseDate`. Text that still
     can't be read is rejected as before.
 - **`onInvalidInput` hook.** Fires after `onChange` when typed text is rejected, with
-  `{ value, reason }` as the fourth argument. `reason` is `"unparsable"` (does not match the format) or
-  `"disabled"` (disabled or outside `minDate`/`maxDate`). Fires when any of the options is on.
+  `{ value, reason }` as the fourth argument. `reason` is `"unparsable"` (does not match the format),
+  `"outOfRange"` (before `minDate` or after `maxDate`) or `"disabled"` (disabled by the `disable` or `enable`
+  options). Fires when any of the options is on.
 - The options are in `boolOpts`, so they can be passed as `data-` attributes like the other boolean options.
 - All three typing paths go through the same function (`setDateFromInput`): blur, Enter, and clicking outside
   the open calendar (`documentClick`). The last one was missed at first: it still used the lenient `setDate`,
@@ -144,7 +145,9 @@ Decisions taken so far, to confirm before the status changes to Accepted:
 - Range input is accepted or rejected as a whole (exactly two dates).
 - Rejected text can be kept in the input (`keepInvalidInput`); the selection is still cleared and
   `onChange` still fires before `onInvalidInput`.
-- Disabled and out-of-range typed dates are reported (`reason: "disabled"`), not dropped silently.
+- Disabled and out-of-range typed dates are reported, not dropped silently, with separate reasons:
+  `outOfRange` (before `minDate` / after `maxDate`, checked first) and `disabled` (the `disable` / `enable`
+  options). Split so a consumer can show a specific message (OutSystems UI maps them to separate error codes).
 - Auto-correction: groups of digits matched left to right, one token per group or several tokens at full
   width (no single digits without separators, mixed forms allowed), full numeric dates only,
   never with `noCalendar`, month/year-only formats, names or AM/PM.

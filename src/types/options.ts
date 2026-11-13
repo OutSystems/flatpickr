@@ -198,8 +198,9 @@ Use it along with "enableTime" to create a time picker. */
   onDestroy: Hook | Hook[];
 
   /* Fires when text typed in the input (allowInput) is rejected, on blur or Enter.
-  The fourth argument is { value, reason }, where reason is "unparsable" (the text does not match the format)
-  or "disabled" (the date is disabled or outside minDate/maxDate).
+  The fourth argument is { value, reason }, where reason is "unparsable" (the text does not match the format),
+  "outOfRange" (the date is before minDate or after maxDate) or "disabled" (the date is disabled by the
+  disable or enable options).
   Fired by the strictInputParsing, keepInvalidInput and autoCorrectInput options. */
   onInvalidInput: Hook | Hook[];
 

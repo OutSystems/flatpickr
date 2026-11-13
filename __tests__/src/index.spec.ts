@@ -2095,17 +2095,51 @@ describe("flatpickr", () => {
         expect(fp._input.value).toEqual("");
       });
 
-      it("reports a date outside minDate as disabled", () => {
-        let invalidData: any;
+      it("reports a date outside minDate or maxDate as outOfRange", () => {
+        const reasons: string[] = [];
         const fp = createStrictInstance({
           minDate: "2024-01-01",
-          onInvalidInput: (_, __, ___, data) => (invalidData = data),
+          maxDate: "2024-12-31",
+          onInvalidInput: (_, __, ___, data) => reasons.push(data.reason),
         });
 
         typeAndBlur(fp, "23-06-2023");
+        expect(fp.selectedDates.length).toEqual(0);
+
+        typeAndBlur(fp, "23-06-2025");
+        expect(fp.selectedDates.length).toEqual(0);
+
+        expect(reasons).toEqual(["outOfRange", "outOfRange"]);
+      });
+
+      it("reports a disabled date as disabled", () => {
+        const reasons: string[] = [];
+        const fp = createStrictInstance({
+          minDate: "2024-01-01",
+          disable: ["2024-06-23", (date: Date) => date.getDay() === 0],
+          onInvalidInput: (_, __, ___, data) => reasons.push(data.reason),
+        });
+
+        // A disabled date, then a Sunday (2024-06-30)
+        typeAndBlur(fp, "23-06-2024");
+        typeAndBlur(fp, "30-06-2024");
 
         expect(fp.selectedDates.length).toEqual(0);
-        expect(invalidData.reason).toEqual("disabled");
+        expect(reasons).toEqual(["disabled", "disabled"]);
+      });
+
+      it("reports outOfRange before disabled when both apply", () => {
+        let invalidData: any;
+        const fp = createStrictInstance({
+          minDate: "2024-01-01",
+          disable: [(date: Date) => date.getDay() === 0],
+          onInvalidInput: (_, __, ___, data) => (invalidData = data),
+        });
+
+        // 2023-12-31 is a Sunday before minDate
+        typeAndBlur(fp, "31-12-2023");
+
+        expect(invalidData.reason).toEqual("outOfRange");
       });
 
       it("accepts or rejects a range as a whole", () => {
@@ -2334,7 +2368,7 @@ describe("flatpickr", () => {
         expect(invalidData).toEqual({ value: "1122020", reason: "unparsable" });
       });
 
-      it("reports a corrected date outside minDate as disabled", () => {
+      it("reports a corrected date outside minDate as outOfRange", () => {
         let invalidData: any;
         const fp = createAutoCorrectInstance({
           minDate: "2024-01-01",
@@ -2344,7 +2378,7 @@ describe("flatpickr", () => {
         typeAndBlur(fp, "23062023");
 
         expect(fp.selectedDates.length).toEqual(0);
-        expect(invalidData.reason).toEqual("disabled");
+        expect(invalidData.reason).toEqual("outOfRange");
       });
 
       it("corrects each date of a range", () => {
