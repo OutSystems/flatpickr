@@ -87,6 +87,9 @@ most common mistyped form (digits without separators) without guessing.
 - **`keepInvalidInput`** (boolean, default `false`). When typed text is rejected, the selection is cleared
   and `onChange` fires as before, but the text stays in the input so the user can correct it. Blurring
   again with the same rejected text does nothing (no repeated clear or hook call).
+  Before (and with the option off, as upstream), rejected text did not stay: Flatpickr emptied the input or put
+  back the previous value, so the input never showed text that wasn't the selected date. With the option on,
+  the input shows the typed text while the selection is empty, until the user corrects it.
 - **`autoCorrectInput`** (boolean, default `false`). Before typed text that does not match the format is
   rejected, `autoCorrectInput` (`src/utils/dates.ts`) tries to rebuild it with the format's separators:
   - The text is read as groups of digits split by any other characters, matched to the tokens from left
@@ -138,6 +141,9 @@ Negative consequences:
 - A second parser, and the correction, to keep in step with token support in `createDateParser`.
 - The fork diverges further from upstream; this change is a candidate to propose upstream.
 - A consumer that turns `keepInvalidInput` on must show the invalid state itself (the hook tells it when).
+- With `keepInvalidInput` on, the input shows text that doesn't match the selection (which is empty), where
+  before it was emptied or reset to the previous value. Consumers must not assume the input is empty after a
+  rejection.
 
 Decisions taken so far, to confirm before the status changes to Accepted:
 
