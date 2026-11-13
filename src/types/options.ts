@@ -198,9 +198,10 @@ Use it along with "enableTime" to create a time picker. */
   onDestroy: Hook | Hook[];
 
   /* Fires when text typed in the input (allowInput) is rejected, on blur or Enter.
-  The fourth argument is { value, reason }, where reason is "unparsable" (the text does not match the format)
-  or "disabled" (the date is disabled or outside minDate/maxDate).
-  Fired by the strictInputParsing and keepInvalidInput options. */
+  The fourth argument is { value, reason }, where reason is "unparsable" (the text does not match the format),
+  "outOfRange" (the date is before minDate or after maxDate) or "disabled" (the date is disabled by the
+  disable or enable options).
+  Fired by the strictInputParsing, keepInvalidInput and autoCorrectInput options. */
   onInvalidInput: Hook | Hook[];
 
   /* Fires when valid keyboard input for calendar is detected */
@@ -260,6 +261,12 @@ Use it along with "enableTime" to create a time picker. */
   /* Whether to display the current month name in shorthand mode, e.g. "Sep" instead "September" */
   shorthandCurrentMonth: boolean;
 
+  /* Before rejecting a typed date (allowInput) that doesn't match the format, try to correct it: digits typed
+  without separators, with full-width values (e.g. "13122020" for "d-m-Y"), or with other separators
+  (e.g. "13/12/2020") are rebuilt with the format's separators ("13-12-2020"). Only for full numeric dates
+  (day, month and year, optionally with a time); ignored for month/year-only formats and with noCalendar. */
+  autoCorrectInput: boolean;
+
   /* When typed text is rejected (allowInput), keep it in the input instead of clearing it,
   so the user can correct it. The selected dates are still cleared and onChange still fires. */
   keepInvalidInput: boolean;
@@ -308,6 +315,7 @@ export interface ParsedOptions {
   animate: boolean;
   appendTo?: HTMLElement;
   ariaDateFormat: string;
+  autoCorrectInput: boolean;
   autoFillDefaultTime: boolean;
   clickOpens: boolean;
   closeOnSelect: boolean;
@@ -379,6 +387,7 @@ export const defaults: ParsedOptions = {
     typeof window === "object" &&
     window.navigator.userAgent.indexOf("MSIE") === -1,
   ariaDateFormat: "F j, Y",
+  autoCorrectInput: false,
   autoFillDefaultTime: true,
   clickOpens: true,
   closeOnSelect: true,

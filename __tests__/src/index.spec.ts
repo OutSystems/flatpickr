@@ -10,6 +10,7 @@ import {
   getDefaultHours,
   parseStrictInput,
   isStrictFormatSupported,
+  autoCorrectInput,
 } from "utils/dates";
 import { english } from "l10n/default";
 
@@ -2094,17 +2095,51 @@ describe("flatpickr", () => {
         expect(fp._input.value).toEqual("");
       });
 
-      it("reports a date outside minDate as disabled", () => {
-        let invalidData: any;
+      it("reports a date outside minDate or maxDate as outOfRange", () => {
+        const reasons: string[] = [];
         const fp = createStrictInstance({
           minDate: "2024-01-01",
-          onInvalidInput: (_, __, ___, data) => (invalidData = data),
+          maxDate: "2024-12-31",
+          onInvalidInput: (_, __, ___, data) => reasons.push(data.reason),
         });
 
         typeAndBlur(fp, "23-06-2023");
+        expect(fp.selectedDates.length).toEqual(0);
+
+        typeAndBlur(fp, "23-06-2025");
+        expect(fp.selectedDates.length).toEqual(0);
+
+        expect(reasons).toEqual(["outOfRange", "outOfRange"]);
+      });
+
+      it("reports a disabled date as disabled", () => {
+        const reasons: string[] = [];
+        const fp = createStrictInstance({
+          minDate: "2024-01-01",
+          disable: ["2024-06-23", (date: Date) => date.getDay() === 0],
+          onInvalidInput: (_, __, ___, data) => reasons.push(data.reason),
+        });
+
+        // A disabled date, then a Sunday (2024-06-30)
+        typeAndBlur(fp, "23-06-2024");
+        typeAndBlur(fp, "30-06-2024");
 
         expect(fp.selectedDates.length).toEqual(0);
-        expect(invalidData.reason).toEqual("disabled");
+        expect(reasons).toEqual(["disabled", "disabled"]);
+      });
+
+      it("reports outOfRange before disabled when both apply", () => {
+        let invalidData: any;
+        const fp = createStrictInstance({
+          minDate: "2024-01-01",
+          disable: [(date: Date) => date.getDay() === 0],
+          onInvalidInput: (_, __, ___, data) => (invalidData = data),
+        });
+
+        // 2023-12-31 is a Sunday before minDate
+        typeAndBlur(fp, "31-12-2023");
+
+        expect(invalidData.reason).toEqual("outOfRange");
       });
 
       it("accepts or rejects a range as a whole", () => {
@@ -2144,6 +2179,372 @@ describe("flatpickr", () => {
         expect(fp.selectedDates.length).toEqual(1);
         expect(ymd(fp.selectedDates[0])).not.toEqual("2024-6-23");
         expect(timesFired).toEqual(0);
+      });
+    });
+  });
+
+  describe("auto-correct typed input", () => {
+    const ymd = (date: Date | undefined) =>
+      date === undefined
+        ? undefined
+        : `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+
+    describe("autoCorrectInput()", () => {
+      it("adds the format's separators to digits typed without them", () => {
+        expect(autoCorrectInput("13122020", "d-m-Y", english)).toEqual(
+          "13-12-2020"
+        );
+        expect(autoCorrectInput("131220", "d-m-y", english)).toEqual(
+          "13-12-20"
+        );
+        expect(autoCorrectInput("12132020", "m/d/Y", english)).toEqual(
+          "12/13/2020"
+        );
+        expect(autoCorrectInput("20201213", "Y.m.d", english)).toEqual(
+          "2020.12.13"
+        );
+        expect(autoCorrectInput("01072025", "j/n/Y", english)).toEqual(
+          "01/07/2025"
+        );
+      });
+
+      it("does not accept single-digit days or months without separators", () => {
+        expect(autoCorrectInput("1312020", "d-m-Y", english)).toBeUndefined();
+        expect(autoCorrectInput("1122020", "d-m-Y", english)).toBeUndefined();
+        expect(autoCorrectInput("172025", "d-m-Y", english)).toBeUndefined();
+        expect(autoCorrectInput("13120", "d-m-y", english)).toBeUndefined();
+      });
+
+      it("does not correct digits that give no valid date", () => {
+        expect(autoCorrectInput("31022025", "d-m-Y", english)).toBeUndefined();
+        expect(autoCorrectInput("13122020", "m/d/Y", english)).toBeUndefined();
+        expect(autoCorrectInput("23062024", "d-m-y", english)).toBeUndefined();
+      });
+
+      it("replaces other separators with the format's ones", () => {
+        expect(autoCorrectInput("13/12/2020", "d-m-Y", english)).toEqual(
+          "13-12-2020"
+        );
+        expect(autoCorrectInput("13.12.2020", "d-m-Y", english)).toEqual(
+          "13-12-2020"
+        );
+        expect(autoCorrectInput("1 7 2025", "d-m-Y", english)).toEqual(
+          "1-7-2025"
+        );
+        expect(autoCorrectInput("13/12", "d-m-Y", english)).toBeUndefined();
+      });
+
+      it("corrects dates with time", () => {
+        expect(
+          autoCorrectInput("131220201430", "d-m-Y - H:i", english)
+        ).toEqual("13-12-2020 - 14:30");
+        expect(
+          autoCorrectInput("13/12/2020 14:30", "d-m-Y - H:i", english)
+        ).toEqual("13-12-2020 - 14:30");
+      });
+
+      it("corrects a mix of digits with and without separators", () => {
+        const format = "d-m-Y - H:i";
+        expect(autoCorrectInput("12122020 15:20", format, english)).toEqual(
+          "12-12-2020 - 15:20"
+        );
+        expect(autoCorrectInput("12-12-2020 1520", format, english)).toEqual(
+          "12-12-2020 - 15:20"
+        );
+        expect(autoCorrectInput("12122020 1520", format, english)).toEqual(
+          "12-12-2020 - 15:20"
+        );
+        expect(autoCorrectInput("1/7/2025 1530", format, english)).toEqual(
+          "1-7-2025 - 15:30"
+        );
+        expect(autoCorrectInput("1212 2020", "d-m-Y", english)).toEqual(
+          "12-12-2020"
+        );
+      });
+
+      it("does not correct a mix that can't be matched at full width", () => {
+        const format = "d-m-Y - H:i";
+        // 7 digits can't be day+month+year at full width (8)
+        expect(
+          autoCorrectInput("1122020 15:20", format, english)
+        ).toBeUndefined();
+        // 3 digits for the time: no single-digit hour or minute without separators
+        expect(
+          autoCorrectInput("12122020 930", format, english)
+        ).toBeUndefined();
+        // Digits left over, or tokens missing
+        expect(
+          autoCorrectInput("12122020 15:20:30", format, english)
+        ).toBeUndefined();
+        expect(
+          autoCorrectInput("12122020 15", format, english)
+        ).toBeUndefined();
+        // A group longer than its token's width that doesn't split exactly
+        expect(
+          autoCorrectInput("123/12/2020", "d-m-Y", english)
+        ).toBeUndefined();
+      });
+
+      it("does not turn a date typed without its time into another date and time", () => {
+        expect(
+          autoCorrectInput("13122020", "d/m/Y - H:i", english)
+        ).toBeUndefined();
+        expect(
+          autoCorrectInput("13122020930", "d/m/Y - H:i", english)
+        ).toBeUndefined();
+      });
+
+      it("leaves month/year formats alone (MonthPicker)", () => {
+        expect(autoCorrectInput("122020", "m/Y", english)).toBeUndefined();
+        expect(autoCorrectInput("202012", "Y-m", english)).toBeUndefined();
+        expect(autoCorrectInput("12-2020", "m/Y", english)).toBeUndefined();
+      });
+
+      it("leaves times alone (TimePicker)", () => {
+        expect(autoCorrectInput("1430", "H:i", english, true)).toBeUndefined();
+        expect(autoCorrectInput("1430", "H:i", english)).toBeUndefined();
+        expect(
+          autoCorrectInput("131220201430", "d-m-Y - H:i", english, true)
+        ).toBeUndefined();
+      });
+
+      it("leaves formats with names alone", () => {
+        expect(autoCorrectInput("13122020", "d M Y", english)).toBeUndefined();
+        expect(
+          autoCorrectInput("131220200230", "d/m/Y - h:i K", english)
+        ).toBeUndefined();
+      });
+    });
+
+    describe("typed input", () => {
+      const typeAndBlur = (fp: Instance, value: string) => {
+        fp._input.value = value;
+        simulate("blur", fp._input);
+      };
+
+      const createAutoCorrectInstance = (config?: Options) =>
+        createInstance({
+          allowInput: true,
+          altInput: true,
+          altFormat: "d-m-Y",
+          dateFormat: "Y-m-d",
+          strictInputParsing: true,
+          keepInvalidInput: true,
+          autoCorrectInput: true,
+          // An earlier test localizes the default locale to Russian (other range separator)
+          locale: english,
+          ...config,
+        });
+
+      it("corrects digits typed without separators and selects the date", () => {
+        let timesFired = 0;
+        const fp = createAutoCorrectInstance({
+          onInvalidInput: () => timesFired++,
+        });
+
+        typeAndBlur(fp, "13122020");
+
+        expect(ymd(fp.selectedDates[0])).toEqual("2020-12-13");
+        expect(fp._input.value).toEqual("13-12-2020");
+        expect(timesFired).toEqual(0);
+      });
+
+      it("corrects other separators", () => {
+        const fp = createAutoCorrectInstance();
+        typeAndBlur(fp, "13/12/2020");
+        expect(ymd(fp.selectedDates[0])).toEqual("2020-12-13");
+      });
+
+      it("still rejects text it can't correct, and keeps it", () => {
+        let invalidData: any;
+        const fp = createAutoCorrectInstance({
+          onInvalidInput: (_, __, ___, data) => (invalidData = data),
+        });
+
+        typeAndBlur(fp, "1122020");
+
+        expect(fp.selectedDates.length).toEqual(0);
+        expect(fp._input.value).toEqual("1122020");
+        expect(invalidData).toEqual({ value: "1122020", reason: "unparsable" });
+      });
+
+      it("reports a corrected date outside minDate as outOfRange", () => {
+        let invalidData: any;
+        const fp = createAutoCorrectInstance({
+          minDate: "2024-01-01",
+          onInvalidInput: (_, __, ___, data) => (invalidData = data),
+        });
+
+        typeAndBlur(fp, "23062023");
+
+        expect(fp.selectedDates.length).toEqual(0);
+        expect(invalidData.reason).toEqual("outOfRange");
+      });
+
+      it("corrects each date of a range", () => {
+        const fp = createAutoCorrectInstance({ mode: "range" });
+        typeAndBlur(fp, "01062024 to 05/06/2024");
+        expect(fp.selectedDates.map(ymd)).toEqual(["2024-6-1", "2024-6-5"]);
+      });
+
+      it("corrects before the default parser when strict parsing is off", () => {
+        const fp = createAutoCorrectInstance({
+          strictInputParsing: false,
+          keepInvalidInput: false,
+        });
+
+        typeAndBlur(fp, "23062024");
+
+        expect(ymd(fp.selectedDates[0])).toEqual("2024-6-23");
+      });
+
+      describe("clicking outside the open calendar", () => {
+        // Same format OutSystems UI builds from DateFormat "DD-MM-YYYY " with a 24h time
+        const createDateTimeInstance = (config?: Options) =>
+          createAutoCorrectInstance({
+            enableTime: true,
+            time_24hr: true,
+            altFormat: "d-m-Y  - H:i",
+            dateFormat: "Y-m-d H:i:S",
+            ...config,
+          });
+
+        const typeAndClickOutside = (fp: Instance, value: string) => {
+          fp._input.value = value;
+          fp.isOpen = true;
+          simulate(
+            "mousedown",
+            window.document.body,
+            { which: 1 },
+            CustomEvent
+          );
+        };
+
+        const ymdhm = (date: Date | undefined) =>
+          date === undefined
+            ? undefined
+            : `${ymd(date)} ${date.getHours()}:${date.getMinutes()}`;
+
+        it("corrects the typed text instead of parsing it leniently", () => {
+          const fp = createDateTimeInstance();
+
+          typeAndClickOutside(fp, "121220201520");
+
+          expect(fp.selectedDates.map(ymdhm)).toEqual(["2020-12-12 15:20"]);
+        });
+
+        it("corrects a date without separators followed by a time with them", () => {
+          const fp = createDateTimeInstance();
+
+          typeAndClickOutside(fp, "12122020 15:20");
+
+          expect(fp.selectedDates.map(ymdhm)).toEqual(["2020-12-12 15:20"]);
+        });
+
+        it("rejects text it can't correct, keeps it and does not select today", () => {
+          const invalid: any[] = [];
+          const fp = createDateTimeInstance({
+            onInvalidInput: (_, __, ___, data) => invalid.push(data),
+          });
+
+          typeAndClickOutside(fp, "1122020 15:20");
+          simulate("blur", fp._input);
+
+          expect(fp.selectedDates.length).toEqual(0);
+          expect(fp._input.value).toEqual("1122020 15:20");
+          expect(invalid).toEqual([
+            { value: "1122020 15:20", reason: "unparsable" },
+          ]);
+        });
+
+        it("does not reject a same-day range shown as a single date", () => {
+          const invalid: any[] = [];
+          const fp = createAutoCorrectInstance({
+            mode: "range",
+            defaultDate: ["2020-12-13", "2020-12-13"],
+            onInvalidInput: (_, __, ___, data) => invalid.push(data),
+          });
+
+          typeAndClickOutside(fp, fp._input.value);
+
+          expect(fp.selectedDates.map(ymd)).toEqual([
+            "2020-12-13",
+            "2020-12-13",
+          ]);
+          expect(fp._input.value).toEqual("13-12-2020");
+          expect(invalid).toEqual([]);
+        });
+
+        it("does not report the same rejected text again after reopening", () => {
+          const invalid: any[] = [];
+          let changes = 0;
+          const fp = createAutoCorrectInstance({
+            onInvalidInput: (_, __, ___, data) => invalid.push(data),
+            onChange: () => changes++,
+          });
+
+          typeAndClickOutside(fp, "abc");
+          typeAndClickOutside(fp, "abc");
+
+          expect(fp._input.value).toEqual("abc");
+          expect(invalid).toEqual([{ value: "abc", reason: "unparsable" }]);
+          expect(changes).toEqual(1);
+        });
+
+        it("keeps the rejected text when a focused time field blurs after the click", () => {
+          const fp = createDateTimeInstance();
+
+          typeAndClickOutside(fp, "abc");
+          simulate("blur", fp.hourElement as HTMLInputElement, {}, FocusEvent);
+
+          expect(fp.selectedDates.length).toEqual(0);
+          expect(fp._input.value).toEqual("abc");
+        });
+
+        it("still applies a time edit made while the calendar is open", () => {
+          const fp = createDateTimeInstance();
+
+          fp.isOpen = true;
+          (fp.hourElement as HTMLInputElement).value = "15";
+          simulate("blur", fp.hourElement as HTMLInputElement, {}, FocusEvent);
+
+          expect(fp.selectedDates.length).toEqual(1);
+          expect(fp.selectedDates[0].getHours()).toEqual(15);
+        });
+
+        it("keeps the previous lenient behaviour when the options are off", () => {
+          const fp = createDateTimeInstance({
+            strictInputParsing: false,
+            keepInvalidInput: false,
+            autoCorrectInput: false,
+          });
+
+          typeAndClickOutside(fp, "121220201520");
+
+          expect(fp.selectedDates.length).toEqual(1);
+          expect(ymdhm(fp.selectedDates[0])).not.toEqual("2020-12-12 15:20");
+        });
+      });
+
+      it("does not correct a time-only picker", () => {
+        const fp = createAutoCorrectInstance({
+          noCalendar: true,
+          enableTime: true,
+          altFormat: "H:i",
+          dateFormat: "H:i",
+        });
+
+        typeAndBlur(fp, "1430");
+
+        expect(fp.selectedDates.length).toEqual(0);
+        expect(fp._input.value).toEqual("1430");
+      });
+
+      it("does not correct anything when the option is off", () => {
+        const fp = createAutoCorrectInstance({ autoCorrectInput: false });
+        typeAndBlur(fp, "13122020");
+        expect(fp.selectedDates.length).toEqual(0);
+        expect(fp._input.value).toEqual("13122020");
       });
     });
   });
