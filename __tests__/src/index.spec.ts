@@ -2209,6 +2209,48 @@ describe("flatpickr", () => {
         ).toEqual("13-12-2020 - 14:30");
       });
 
+      it("corrects a mix of digits with and without separators", () => {
+        const format = "d-m-Y - H:i";
+        expect(autoCorrectInput("12122020 15:20", format, english)).toEqual(
+          "12-12-2020 - 15:20"
+        );
+        expect(autoCorrectInput("12-12-2020 1520", format, english)).toEqual(
+          "12-12-2020 - 15:20"
+        );
+        expect(autoCorrectInput("12122020 1520", format, english)).toEqual(
+          "12-12-2020 - 15:20"
+        );
+        expect(autoCorrectInput("1/7/2025 1530", format, english)).toEqual(
+          "1-7-2025 - 15:30"
+        );
+        expect(autoCorrectInput("1212 2020", "d-m-Y", english)).toEqual(
+          "12-12-2020"
+        );
+      });
+
+      it("does not correct a mix that can't be matched at full width", () => {
+        const format = "d-m-Y - H:i";
+        // 7 digits can't be day+month+year at full width (8)
+        expect(
+          autoCorrectInput("1122020 15:20", format, english)
+        ).toBeUndefined();
+        // 3 digits for the time: no single-digit hour or minute without separators
+        expect(
+          autoCorrectInput("12122020 930", format, english)
+        ).toBeUndefined();
+        // Digits left over, or tokens missing
+        expect(
+          autoCorrectInput("12122020 15:20:30", format, english)
+        ).toBeUndefined();
+        expect(
+          autoCorrectInput("12122020 15", format, english)
+        ).toBeUndefined();
+        // A group longer than its token's width that doesn't split exactly
+        expect(
+          autoCorrectInput("123/12/2020", "d-m-Y", english)
+        ).toBeUndefined();
+      });
+
       it("does not turn a date typed without its time into another date and time", () => {
         expect(
           autoCorrectInput("13122020", "d/m/Y - H:i", english)
@@ -2357,19 +2399,27 @@ describe("flatpickr", () => {
           expect(fp.selectedDates.map(ymdhm)).toEqual(["2020-12-12 15:20"]);
         });
 
+        it("corrects a date without separators followed by a time with them", () => {
+          const fp = createDateTimeInstance();
+
+          typeAndClickOutside(fp, "12122020 15:20");
+
+          expect(fp.selectedDates.map(ymdhm)).toEqual(["2020-12-12 15:20"]);
+        });
+
         it("rejects text it can't correct, keeps it and does not select today", () => {
           const invalid: any[] = [];
           const fp = createDateTimeInstance({
             onInvalidInput: (_, __, ___, data) => invalid.push(data),
           });
 
-          typeAndClickOutside(fp, "12122020 15:20");
+          typeAndClickOutside(fp, "1122020 15:20");
           simulate("blur", fp._input);
 
           expect(fp.selectedDates.length).toEqual(0);
-          expect(fp._input.value).toEqual("12122020 15:20");
+          expect(fp._input.value).toEqual("1122020 15:20");
           expect(invalid).toEqual([
-            { value: "12122020 15:20", reason: "unparsable" },
+            { value: "1122020 15:20", reason: "unparsable" },
           ]);
         });
 

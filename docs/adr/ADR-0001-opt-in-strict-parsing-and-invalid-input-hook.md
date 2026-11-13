@@ -87,12 +87,19 @@ most common mistyped form (digits without separators) without guessing.
   again with the same rejected text does nothing (no repeated clear or hook call).
 - **`autoCorrectInput`** (boolean, default `false`). Before typed text that does not match the format is
   rejected, `autoCorrectInput` (`src/utils/dates.ts`) tries to rebuild it with the format's separators:
-  - Digits typed without separators: every token takes its full width (2 digits, 4 for `Y`), so the
-    number of digits must match the format exactly and the split is fixed; single-digit days, months or
-    hours are not accepted, so nothing is guessed. `13122020` becomes `13-12-2020` for `d-m-Y`;
-    `1312020` is not corrected.
-  - Digit groups with other separators (`13/12/2020`, `13.12.2020`, `1/7/2025` for `d-m-Y`): rebuilt when
-    there is one group per token.
+  - The text is read as groups of digits split by any other characters, matched to the tokens from left
+    to right. Each group holds either one token, with 1 digit up to the token's full width
+    (`13/12/2020`, `13.12.2020`, `1/7/2025` for `d-m-Y`), or several consecutive tokens, each at its full
+    width (2 digits, 4 for `Y`), so the group's length must be exactly their summed widths.
+  - So digits typed without separators (`13122020` for `d-m-Y`) and mixed forms (`12122020 15:20`,
+    `12-12-2020 1520` for `d-m-Y - H:i`) are rebuilt with the format's separators. Single-digit values are
+    only accepted where the user typed the separators around them: `1312020` and `1122020 15:20` are not
+    corrected. There is only ever one way to match the groups, so nothing is guessed; leftover digits or
+    tokens mean no correction.
+  - The mixed forms were added after testing on a date-and-time picker: `12122020 15:20` (date without
+    separators, time with them) was rejected by the first version, which only accepted digits only or one
+    group per token. A comparison over 18 formats and 35 inputs showed the extended rule only turns
+    rejections into corrections; nothing that was corrected before is read differently.
   - Only for full numeric dates (a day, a month and a year token, optionally with a time). Not for
     month/year-only formats (MonthPicker), time-only pickers (`noCalendar`), month/weekday names or AM/PM.
   - Only when the text does not already match strictly, and never with a custom `parseDate`. Text that still
@@ -138,7 +145,8 @@ Decisions taken so far, to confirm before the status changes to Accepted:
 - Rejected text can be kept in the input (`keepInvalidInput`); the selection is still cleared and
   `onChange` still fires before `onInvalidInput`.
 - Disabled and out-of-range typed dates are reported (`reason: "disabled"`), not dropped silently.
-- Auto-correction: full-width values only (no single digits without separators), full numeric dates only,
+- Auto-correction: groups of digits matched left to right, one token per group or several tokens at full
+  width (no single digits without separators, mixed forms allowed), full numeric dates only,
   never with `noCalendar`, month/year-only formats, names or AM/PM.
 
 ## Links

@@ -363,12 +363,17 @@ const isFullDateFormat = (tokens: string[]) =>
   tokens.some((token) => token === "Y" || token === "y");
 
 /**
- * Try to turn a date typed without the format's separators into text that matches the format.
- * - Digits only (e.g. "13122020" for "d-m-Y"): every token takes its full width (2 digits, 4 for Y), so the
- *   number of digits must match the format exactly; single-digit days, months or hours are not accepted.
- *   "13122020" becomes "13-12-2020"; "1312020" is not corrected.
- * - Digit groups with other separators (e.g. "13/12/2020", "13.12.2020" or "1/7/2025" for "d-m-Y"): when
- *   there is one group per token, the groups are joined with the format's separators.
+ * Try to turn a date typed without the format's separators, or with other ones, into text that matches the
+ * format. The text is read as groups of digits split by any other characters, matched to the format's tokens
+ * from left to right. Each group either:
+ * - holds one token, with 1 digit up to the token's full width (e.g. "13/12/2020", "13.12.2020" or "1/7/2025"
+ *   for "d-m-Y"), or
+ * - holds several consecutive tokens, each at its full width (2 digits, 4 for Y), so the group's length must be
+ *   exactly their summed widths (e.g. "13122020" for "d-m-Y", or "12122020 15:20" and "12-12-2020 1520" for
+ *   "d-m-Y - H:i"). Single-digit values are only accepted when the user typed the separators around them, so
+ *   "1312020" is not corrected.
+ * There is only ever one way to match the groups, so nothing is guessed. Leftover digits or tokens, or a value
+ * that is not a valid date, mean the text is not corrected.
  * Only for full dates (a day, a month and a year token, optionally with a time) made of numeric tokens, and
  * never for time-only pickers (noCalendar): month/year-only formats, times, month/weekday names and AM/PM are
  * not corrected.
@@ -391,25 +396,38 @@ export const autoCorrectInput = (
   if (!isFullDateFormat(tokens)) return undefined;
 
   const text = input.trim();
-  let values: string[];
 
-  if (/^\d+(?:[^\dA-Za-z]+\d+)+$/.test(text)) {
-    // Digit groups with any other separators
-    values = text.split(/[^\d]+/);
-    if (values.length !== tokens.length) return undefined;
-  } else if (/^\d+$/.test(text)) {
-    // Digits only: split by the full width of each token
-    const widths = tokens.map((token) => autoCorrectTokenWidths[token]);
-    if (widths.reduce((sum, width) => sum + width, 0) !== text.length)
-      return undefined;
+  // Only digits, in groups split by any characters other than letters
+  if (!/^\d+(?:[^\dA-Za-z]+\d+)*$/.test(text)) return undefined;
 
+  const values: string[] = [];
+  let tokenIndex = 0;
+
+  for (const group of text.split(/[^\d]+/)) {
+    if (tokenIndex >= tokens.length) return undefined;
+
+    // A group that fits the next token holds just that token
+    if (group.length <= autoCorrectTokenWidths[tokens[tokenIndex]]) {
+      values.push(group);
+      tokenIndex++;
+      continue;
+    }
+
+    // A longer group holds consecutive tokens, each at its full width
     let offset = 0;
-    values = widths.map((width) => {
-      const value = text.substr(offset, width);
+    while (offset < group.length) {
+      if (tokenIndex >= tokens.length) return undefined;
+
+      const width = autoCorrectTokenWidths[tokens[tokenIndex]];
+      if (offset + width > group.length) return undefined;
+
+      values.push(group.substr(offset, width));
       offset += width;
-      return value;
-    });
-  } else return undefined;
+      tokenIndex++;
+    }
+  }
+
+  if (tokenIndex !== tokens.length) return undefined;
 
   const candidate = joinWithLiterals(segments, values);
   return parseStrictInput(candidate, format, locale) !== undefined
