@@ -45,7 +45,7 @@ Upstream Flatpickr has had no release since 4.6.13, and the lenient parsing is r
   - Cons: changes parsing of config values and `setDate` calls for everyone; breaking for upstream-style
     usage that relies on the leniency (for example `parseDate` fallbacks, shorthand strings).
 - Option 2 — Opt-in options that apply only to typed text, plus a hook
-  - Pros: only the typing paths (blur, Enter) change, and only when turned on. Knows both failure reasons.
+  - Pros: only the typing paths (blur, Enter, clicking outside the open calendar) change, and only when turned on. Knows both failure reasons.
     Range and multiple input are accepted or rejected as a whole.
   - Cons: a second parser to maintain next to `createDateParser`; more divergence from upstream.
 - Option 3 — Leave the library as is; consumers pass a strict `parseDate`
@@ -101,7 +101,13 @@ most common mistyped form (digits without separators) without guessing.
   `{ value, reason }` as the fourth argument. `reason` is `"unparsable"` (does not match the format) or
   `"disabled"` (disabled or outside `minDate`/`maxDate`). Fires when any of the options is on.
 - The options are in `boolOpts`, so they can be passed as `data-` attributes like the other boolean options.
-- With all three options off, blur and Enter call `setDate` exactly as before.
+- All three typing paths go through the same function (`setDateFromInput`): blur, Enter, and clicking outside
+  the open calendar (`documentClick`). The last one was missed at first: it still used the lenient `setDate`,
+  so with a date-and-time picker (whose calendar stays open while typing) `121220201520` was read as
+  12-10-2016 00:00. After a rejection on that path, `updateTime` is skipped, since it would otherwise select
+  today's date.
+- With all three options off, the three paths call `setDate` exactly as before (`documentClick` without
+  triggering change, as upstream).
 
 How OutSystems UI uses them (its ADR-0022): a single low-code switch, `StrictInputValidation` (off by
 default), turns on `strictInputParsing`, `keepInvalidInput` and `autoCorrectInput` together, for DatePicker and
@@ -125,7 +131,8 @@ Negative consequences:
 Decisions taken so far, to confirm before the status changes to Accepted:
 
 - All new options are off by default; no behaviour change for consumers that don't turn them on.
-- Only the typing paths (blur, Enter) change; config values and `setDate` from code are parsed as before.
+- Only the typing paths (blur, Enter, clicking outside the open calendar) change; config values and `setDate`
+  from code are parsed as before.
 - A custom `parseDate` always wins over the strict parser and the correction.
 - Range input is accepted or rejected as a whole (exactly two dates).
 - Rejected text can be kept in the input (`keepInvalidInput`); the selection is still cleared and

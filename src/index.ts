@@ -1630,17 +1630,22 @@ function FlatpickrInstance(
       );
 
       if (lostFocus && isIgnored) {
+        // Typed text goes through the same checks as blur and Enter; with the new options off this is the
+        // previous setDate(value, false, format)
+        let isInputRejected = false;
         if (self.config.allowInput) {
-          self.setDate(
+          isInputRejected = !setDateFromInput(
             self._input.value,
-            false,
             self.config.altInput
               ? self.config.altFormat
-              : self.config.dateFormat
+              : self.config.dateFormat,
+            false
           );
         }
 
+        // After a rejection the selection is empty on purpose: updateTime would select today instead
         if (
+          !isInputRejected &&
           self.timeContainer !== undefined &&
           self.minuteElement !== undefined &&
           self.hourElement !== undefined &&
@@ -1784,22 +1789,26 @@ function FlatpickrInstance(
    * outside minDate/maxDate, clears the selection, fires onChange and then onInvalidInput.
    * Without those options it behaves as setDate.
    */
-  function setDateFromInput(value: string, format: string) {
+  function setDateFromInput(
+    value: string,
+    format: string,
+    triggerChange = true
+  ): boolean {
     if (
       !self.config.strictInputParsing &&
       !self.config.keepInvalidInput &&
       !self.config.autoCorrectInput
     ) {
-      self.setDate(value, true, format);
-      return;
+      self.setDate(value, triggerChange, format);
+      return true;
     }
 
     const text = value.trim();
 
     if (text === "") {
       lastInvalidInput = undefined;
-      self.setDate(text, true, format);
-      return;
+      self.setDate(text, triggerChange, format);
+      return true;
     }
 
     let parts = [text];
@@ -1854,8 +1863,8 @@ function FlatpickrInstance(
 
     if (reason === undefined) {
       lastInvalidInput = undefined;
-      self.setDate(dates as Date[], true);
-      return;
+      self.setDate(dates as Date[], triggerChange);
+      return true;
     }
 
     lastInvalidInput = value;
@@ -1864,6 +1873,7 @@ function FlatpickrInstance(
     if (self.config.keepInvalidInput) self._input.value = value;
 
     triggerEvent("onInvalidInput", { value, reason });
+    return false;
   }
 
   function onBlur(e: FocusEvent) {

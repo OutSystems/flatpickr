@@ -2322,6 +2322,71 @@ describe("flatpickr", () => {
         expect(ymd(fp.selectedDates[0])).toEqual("2024-6-23");
       });
 
+      describe("clicking outside the open calendar", () => {
+        // Same format OutSystems UI builds from DateFormat "DD-MM-YYYY " with a 24h time
+        const createDateTimeInstance = (config?: Options) =>
+          createAutoCorrectInstance({
+            enableTime: true,
+            time_24hr: true,
+            altFormat: "d-m-Y  - H:i",
+            dateFormat: "Y-m-d H:i:S",
+            ...config,
+          });
+
+        const typeAndClickOutside = (fp: Instance, value: string) => {
+          fp._input.value = value;
+          fp.isOpen = true;
+          simulate(
+            "mousedown",
+            window.document.body,
+            { which: 1 },
+            CustomEvent
+          );
+        };
+
+        const ymdhm = (date: Date | undefined) =>
+          date === undefined
+            ? undefined
+            : `${ymd(date)} ${date.getHours()}:${date.getMinutes()}`;
+
+        it("corrects the typed text instead of parsing it leniently", () => {
+          const fp = createDateTimeInstance();
+
+          typeAndClickOutside(fp, "121220201520");
+
+          expect(fp.selectedDates.map(ymdhm)).toEqual(["2020-12-12 15:20"]);
+        });
+
+        it("rejects text it can't correct, keeps it and does not select today", () => {
+          const invalid: any[] = [];
+          const fp = createDateTimeInstance({
+            onInvalidInput: (_, __, ___, data) => invalid.push(data),
+          });
+
+          typeAndClickOutside(fp, "12122020 15:20");
+          simulate("blur", fp._input);
+
+          expect(fp.selectedDates.length).toEqual(0);
+          expect(fp._input.value).toEqual("12122020 15:20");
+          expect(invalid).toEqual([
+            { value: "12122020 15:20", reason: "unparsable" },
+          ]);
+        });
+
+        it("keeps the previous lenient behaviour when the options are off", () => {
+          const fp = createDateTimeInstance({
+            strictInputParsing: false,
+            keepInvalidInput: false,
+            autoCorrectInput: false,
+          });
+
+          typeAndClickOutside(fp, "121220201520");
+
+          expect(fp.selectedDates.length).toEqual(1);
+          expect(ymdhm(fp.selectedDates[0])).not.toEqual("2020-12-12 15:20");
+        });
+      });
+
       it("does not correct a time-only picker", () => {
         const fp = createAutoCorrectInstance({
           noCalendar: true,
