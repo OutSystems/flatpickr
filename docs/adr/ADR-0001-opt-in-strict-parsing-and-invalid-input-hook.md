@@ -121,12 +121,14 @@ most common mistyped form (digits without separators) without guessing.
   so with a date-and-time picker (whose calendar stays open while typing) `121220201520` was read as
   12-10-2016 00:00. After a rejection on that path, `updateTime` is skipped, since it would otherwise select
   today's date. For the same reason, the blur of a focused hour/minute field that follows the outside click is
-  ignored while the calendar is closed and the rejected text is still in the input (found in review); time
-  edits while the calendar is open work as before.
+  ignored while the calendar is closed and nothing was selected since the rejection, whether the rejected text
+  is kept or not (found in review); time edits while the calendar is open work as before.
 - Text that is exactly what Flatpickr shows for the current selection is not read back as typed input. A
   same-day date-only range is shown as a single date, which strict parsing would reject as a range with one
-  date (found in review: reopening the calendar and clicking outside cleared a valid range). With the options
-  off, upstream still clears that range on an outside click; that path is unchanged.
+  date (found in review: reopening the calendar and clicking outside cleared a valid range). The selected
+  dates are set again instead, so `onChange` still fires where `setDate(value)` fired it before (e.g. on the
+  blur that follows a click outside, without `altInput`; also found in review). With the options off,
+  upstream still clears that range on an outside click; that path is unchanged.
 - With all three options off, the three paths call `setDate` exactly as before (`documentClick` without
   triggering change, as upstream).
 

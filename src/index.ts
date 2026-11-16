@@ -231,12 +231,12 @@ function FlatpickrInstance(
     e?: MouseEvent | IncrementEvent | KeyboardEvent | FocusEvent
   ) {
     // A click outside that rejected the typed text closes the calendar with the selection empty; the blur of a
-    // focused time field that follows must not select a default date over the kept text
+    // focused time field that follows must not select a default date, whether the rejected text is kept or not
     if (
       e !== undefined &&
       e.type === "blur" &&
       !self.isOpen &&
-      isRejectedInputKept()
+      isRejectionPending()
     )
       return;
 
@@ -1791,12 +1791,16 @@ function FlatpickrInstance(
   // Text typed by the user that was last rejected, to avoid rejecting it again on every blur
   let lastInvalidInput: string | undefined;
 
+  // Typed text was rejected and nothing was selected since
+  function isRejectionPending() {
+    return lastInvalidInput !== undefined && self.selectedDates.length === 0;
+  }
+
   // The last rejected text is still in the input and nothing was selected since
   function isRejectedInputKept() {
     return (
       self.config.keepInvalidInput &&
-      lastInvalidInput !== undefined &&
-      self.selectedDates.length === 0 &&
+      isRejectionPending() &&
       self._input.value === lastInvalidInput
     );
   }
@@ -1824,9 +1828,13 @@ function FlatpickrInstance(
     }
 
     // The text shown for the current selection was not typed: don't read it back (a same-day range shows a
-    // single date, which would be rejected as a range with one date)
-    if (self.selectedDates.length > 0 && value === getDateStr(format))
+    // single date, which would be rejected as a range with one date). The selected dates are set again so that
+    // onChange still fires when asked, as setDate(value) did (e.g. on the blur after a click outside)
+    if (self.selectedDates.length > 0 && value === getDateStr(format)) {
+      lastInvalidInput = undefined;
+      self.setDate(self.selectedDates.slice(), triggerChange);
       return true;
+    }
 
     // The same rejected text again (e.g. clicking outside after reopening): don't reject and report it twice
     if (isRejectedInputKept() && value === lastInvalidInput) return false;

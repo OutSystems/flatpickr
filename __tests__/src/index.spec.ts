@@ -2512,6 +2512,39 @@ describe("flatpickr", () => {
           expect(fp.selectedDates[0].getHours()).toEqual(15);
         });
 
+        it("does not select a default date on a time field blur when the rejected text is not kept", () => {
+          const invalid: any[] = [];
+          const fp = createDateTimeInstance({
+            keepInvalidInput: false,
+            autoCorrectInput: false,
+            onInvalidInput: (_, __, ___, data) => invalid.push(data),
+          });
+
+          typeAndClickOutside(fp, "abc");
+          simulate("blur", fp.hourElement as HTMLInputElement, {}, FocusEvent);
+
+          expect(fp.selectedDates.length).toEqual(0);
+          expect(fp._input.value).toEqual("");
+          expect(invalid).toEqual([{ value: "abc", reason: "unparsable" }]);
+        });
+
+        it("fires onChange on the blur after a click outside without altInput", () => {
+          let changes = 0;
+          const fp = createAutoCorrectInstance({
+            altInput: false,
+            dateFormat: "d-m-Y",
+            onChange: () => changes++,
+          });
+
+          typeAndClickOutside(fp, "13-12-2020");
+          expect(changes).toEqual(0);
+
+          simulate("blur", fp._input, { relatedTarget: document.body }, FocusEvent);
+
+          expect(changes).toEqual(1);
+          expect(fp.selectedDates.map(ymd)).toEqual(["2020-12-13"]);
+        });
+
         it("keeps the previous lenient behaviour when the options are off", () => {
           const fp = createDateTimeInstance({
             strictInputParsing: false,
