@@ -20,6 +20,7 @@ export type HookKey =
   | "onClose"
   | "onDayCreate"
   | "onDestroy"
+  | "onInvalidInput"
   | "onKeyDown"
   | "onMonthChange"
   | "onOpen"
@@ -34,6 +35,7 @@ export const HOOKS: HookKey[] = [
   "onClose",
   "onDayCreate",
   "onDestroy",
+  "onInvalidInput",
   "onKeyDown",
   "onMonthChange",
   "onOpen",
@@ -195,6 +197,13 @@ Use it along with "enableTime" to create a time picker. */
   /* Fires before the calendar instance is destroyed */
   onDestroy: Hook | Hook[];
 
+  /* Fires when text typed in the input (allowInput) is rejected, on blur or Enter.
+  The fourth argument is { value, reason }, where reason is "unparsable" (the text does not match the format),
+  "outOfRange" (the date is before minDate or after maxDate) or "disabled" (the date is disabled by the
+  disable or enable options).
+  Fired by the strictInputParsing, keepInvalidInput and autoCorrectInput options. */
+  onInvalidInput: Hook | Hook[];
+
   /* Fires when valid keyboard input for calendar is detected */
   onKeyDown: Hook | Hook[];
 
@@ -252,8 +261,23 @@ Use it along with "enableTime" to create a time picker. */
   /* Whether to display the current month name in shorthand mode, e.g. "Sep" instead "September" */
   shorthandCurrentMonth: boolean;
 
+  /* Before rejecting a typed date (allowInput) that doesn't match the format, try to correct it: digits typed
+  without separators, with full-width values (e.g. "13122020" for "d-m-Y"), or with other separators
+  (e.g. "13/12/2020") are rebuilt with the format's separators ("13-12-2020"). Only for full numeric dates
+  (day, month and year, optionally with a time); ignored for month/year-only formats and with noCalendar. */
+  autoCorrectInput: boolean;
+
+  /* When typed text is rejected (allowInput), keep it in the input instead of clearing it,
+  so the user can correct it. The selected dates are still cleared and onChange still fires. */
+  keepInvalidInput: boolean;
+
   /* Creates a wrapper to position the calendar. Use this if the input is inside a scrollable element */
   static: boolean;
+
+  /* Parse text typed in the input (allowInput) strictly against the format: the whole text must match,
+  separators included, every token must be present, values must be in range, and dates that would roll over
+  (e.g. 31-02) are rejected. Month and weekday names are case-insensitive. A custom parseDate still wins. */
+  strictInputParsing: boolean;
 
   /* Sets the number of months to show */
   showMonths?: number;
@@ -291,6 +315,7 @@ export interface ParsedOptions {
   animate: boolean;
   appendTo?: HTMLElement;
   ariaDateFormat: string;
+  autoCorrectInput: boolean;
   autoFillDefaultTime: boolean;
   clickOpens: boolean;
   closeOnSelect: boolean;
@@ -311,6 +336,7 @@ export interface ParsedOptions {
   hourIncrement: number;
   ignoredFocusElements: HTMLElement[];
   inline: boolean;
+  keepInvalidInput: boolean;
   locale: LocaleKey | CustomLocale;
   maxDate?: Date;
   maxTime?: Date;
@@ -326,6 +352,7 @@ export interface ParsedOptions {
   onClose: Hook[];
   onDayCreate: Hook[];
   onDestroy: Hook[];
+  onInvalidInput: Hook[];
   onKeyDown: Hook[];
   onMonthChange: Hook[];
   onOpen: Hook[];
@@ -342,6 +369,7 @@ export interface ParsedOptions {
   shorthandCurrentMonth: boolean;
   showMonths: number;
   static: boolean;
+  strictInputParsing: boolean;
   time_24hr: boolean;
   updateInputVal: boolean;
   weekNumbers: boolean;
@@ -359,6 +387,7 @@ export const defaults: ParsedOptions = {
     typeof window === "object" &&
     window.navigator.userAgent.indexOf("MSIE") === -1,
   ariaDateFormat: "F j, Y",
+  autoCorrectInput: false,
   autoFillDefaultTime: true,
   clickOpens: true,
   closeOnSelect: true,
@@ -397,6 +426,7 @@ export const defaults: ParsedOptions = {
   hourIncrement: 1,
   ignoredFocusElements: [],
   inline: false,
+  keepInvalidInput: false,
   locale: "default",
   minuteIncrement: 5,
   mode: "single",
@@ -409,6 +439,7 @@ export const defaults: ParsedOptions = {
   onClose: [],
   onDayCreate: [],
   onDestroy: [],
+  onInvalidInput: [],
   onKeyDown: [],
   onMonthChange: [],
   onOpen: [],
@@ -425,6 +456,7 @@ export const defaults: ParsedOptions = {
   shorthandCurrentMonth: false,
   showMonths: 1,
   static: false,
+  strictInputParsing: false,
   time_24hr: false,
   updateInputVal: true,
   weekNumbers: false,

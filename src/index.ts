@@ -32,6 +32,9 @@ import {
   getDefaultHours,
   calculateSecondsSinceMidnight,
   parseSeconds,
+  parseStrictInput,
+  isStrictFormatSupported,
+  autoCorrectInput,
 } from "./utils/dates";
 
 import { tokenRegex, monthToStr } from "./utils/formatting";
@@ -227,6 +230,16 @@ function FlatpickrInstance(
   function updateTime(
     e?: MouseEvent | IncrementEvent | KeyboardEvent | FocusEvent
   ) {
+    // A click outside that rejected the typed text closes the calendar with the selection empty; the blur of a
+    // focused time field that follows must not select a default date, whether the rejected text is kept or not
+    if (
+      e !== undefined &&
+      e.type === "blur" &&
+      !self.isOpen &&
+      isRejectionPending()
+    )
+      return;
+
     if (self.selectedDates.length === 0) {
       const defaultDate =
         self.config.minDate === undefined ||
@@ -1627,17 +1640,22 @@ function FlatpickrInstance(
       );
 
       if (lostFocus && isIgnored) {
+        // Typed text goes through the same checks as blur and Enter; with the new options off this is the
+        // previous setDate(value, false, format)
+        let isInputRejected = false;
         if (self.config.allowInput) {
-          self.setDate(
+          isInputRejected = !setDateFromInput(
             self._input.value,
-            false,
             self.config.altInput
               ? self.config.altFormat
-              : self.config.dateFormat
+              : self.config.dateFormat,
+            false
           );
         }
 
+        // After a rejection the selection is empty on purpose: updateTime would select today instead
         if (
+          !isInputRejected &&
           self.timeContainer !== undefined &&
           self.minuteElement !== undefined &&
           self.hourElement !== undefined &&
@@ -1770,9 +1788,145 @@ function FlatpickrInstance(
     return false;
   }
 
+  // Text typed by the user that was last rejected, to avoid rejecting it again on every blur
+  let lastInvalidInput: string | undefined;
+
+  // Typed text was rejected and nothing was selected since
+  function isRejectionPending() {
+    return lastInvalidInput !== undefined && self.selectedDates.length === 0;
+  }
+
+  // The last rejected text is still in the input and nothing was selected since
+  function isRejectedInputKept() {
+    return (
+      self.config.keepInvalidInput &&
+      isRejectionPending() &&
+      self._input.value === lastInvalidInput
+    );
+  }
+
+  /**
+   * Set the date from the text typed by the user (allowInput), on blur or Enter.
+   * With autoCorrectInput, text that doesn't match the format is first corrected when that gives one valid date
+   * (e.g. "13122020" becomes "13-12-2020" for "d-m-Y").
+   * With strictInputParsing or keepInvalidInput, a text that can't be parsed, or a date that is disabled or
+   * outside minDate/maxDate, clears the selection, fires onChange and then onInvalidInput.
+   * Without those options it behaves as setDate.
+   */
+  function setDateFromInput(
+    value: string,
+    format: string,
+    triggerChange = true
+  ): boolean {
+    if (
+      !self.config.strictInputParsing &&
+      !self.config.keepInvalidInput &&
+      !self.config.autoCorrectInput
+    ) {
+      self.setDate(value, triggerChange, format);
+      return true;
+    }
+
+    // The text shown for the current selection was not typed: don't read it back (a same-day range shows a
+    // single date, which would be rejected as a range with one date). The selected dates are set again so that
+    // onChange still fires when asked, as setDate(value) did (e.g. on the blur after a click outside)
+    if (self.selectedDates.length > 0 && value === getDateStr(format)) {
+      lastInvalidInput = undefined;
+      self.setDate(self.selectedDates.slice(), triggerChange);
+      return true;
+    }
+
+    // The same rejected text again (e.g. clicking outside after reopening): don't reject and report it twice
+    if (isRejectedInputKept() && value === lastInvalidInput) return false;
+
+    const text = value.trim();
+
+    if (text === "") {
+      lastInvalidInput = undefined;
+      self.setDate(text, triggerChange, format);
+      return true;
+    }
+
+    let parts = [text];
+    if (self.config.mode === "range")
+      parts = text.split(self.l10n.rangeSeparator);
+    else if (self.config.mode === "multiple")
+      parts = text.split(self.config.conjunction);
+
+    // A custom parseDate always wins over the strict parser
+    const useStrictParser =
+      self.config.strictInputParsing &&
+      self.config.parseDate === undefined &&
+      isStrictFormatSupported(format);
+
+    // Try to correct the typed text first; only text that still can't be read is rejected
+    const correctPart = (part: string) => {
+      if (
+        !self.config.autoCorrectInput ||
+        self.config.noCalendar ||
+        self.config.parseDate !== undefined ||
+        parseStrictInput(part, format, self.l10n, self.config.noCalendar) !==
+          undefined
+      )
+        return part;
+
+      const corrected = autoCorrectInput(
+        part,
+        format,
+        self.l10n,
+        self.config.noCalendar
+      );
+      return corrected !== undefined ? corrected : part;
+    };
+
+    const dates = parts.map(correctPart).map((part) =>
+      useStrictParser
+        ? parseStrictInput(part, format, self.l10n, self.config.noCalendar)
+        : self.parseDate(part.trim(), format)
+    );
+
+    let reason: "unparsable" | "outOfRange" | "disabled" | undefined;
+
+    // Before minDate or after maxDate, compared with the time as isEnabled(date, false) does
+    const isOutOfRange = (date: Date) =>
+      (self.config.minDate !== undefined &&
+        compareDates(date, self.config.minDate, false) < 0) ||
+      (self.config.maxDate !== undefined &&
+        compareDates(date, self.config.maxDate, false) > 0);
+
+    if (
+      dates.some((date) => date === undefined) ||
+      (self.config.strictInputParsing &&
+        self.config.mode === "range" &&
+        dates.length !== 2)
+    )
+      reason = "unparsable";
+    else if (dates.some((date) => isOutOfRange(date as Date)))
+      reason = "outOfRange";
+    else if (dates.some((date) => !isEnabled(date as Date, false)))
+      reason = "disabled";
+
+    if (reason === undefined) {
+      lastInvalidInput = undefined;
+      self.setDate(dates as Date[], triggerChange);
+      return true;
+    }
+
+    lastInvalidInput = value;
+    self.clear(true, false);
+
+    if (self.config.keepInvalidInput) self._input.value = value;
+
+    triggerEvent("onInvalidInput", { value, reason });
+    return false;
+  }
+
   function onBlur(e: FocusEvent) {
     const isInput = e.target === self._input;
     let valueChanged = true;
+
+    // The same rejected text is still in the input: nothing to do
+    if (isRejectedInputKept()) return;
 
     if (self.config.altInput) {
       const hiddenInputValue = self.element.getAttribute("value") as string;
@@ -1796,9 +1950,8 @@ function FlatpickrInstance(
       valueChanged &&
       !(e.relatedTarget && isCalendarElem(e.relatedTarget as HTMLElement))
     ) {
-      self.setDate(
+      setDateFromInput(
         self._input.value,
-        true,
         e.target === self.altInput
           ? self.config.altFormat
           : self.config.dateFormat
@@ -1828,9 +1981,8 @@ function FlatpickrInstance(
 
     if (e.keyCode === 13 && isInput) {
       if (allowInput) {
-        self.setDate(
+        setDateFromInput(
           self._input.value,
-          true,
           eventTarget === self.altInput
             ? self.config.altFormat
             : self.config.dateFormat
@@ -2194,6 +2346,9 @@ function FlatpickrInstance(
       "enableSeconds",
       "disableMobile",
       "updateInputVal",
+      "strictInputParsing",
+      "keepInvalidInput",
+      "autoCorrectInput",
     ];
 
     const userConfig = {
